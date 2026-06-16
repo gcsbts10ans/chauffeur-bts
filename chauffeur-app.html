@@ -479,6 +479,16 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .toast svg{width:20px;height:20px;flex-shrink:0;fill:none;stroke-width:2.4}
 .toast.ok{color:#15803d}.toast.ok svg{stroke:#15803d}
 .toast.err{color:#b91c1c}.toast.err svg{stroke:#b91c1c}
+/* Popup message important (bloquante, au-dessus de tout) */
+.imp-ov{position:fixed;inset:0;z-index:10000;background:rgba(30,40,70,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px;animation:fade .2s ease}
+.imp-ov.on{display:flex}
+.imp-card{width:100%;max-width:380px;background:rgba(255,255,255,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-top:5px solid var(--red);border-radius:20px;padding:24px 22px 20px;box-shadow:0 20px 50px rgba(30,60,114,.35);text-align:center}
+.imp-ic{width:58px;height:58px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,.1)}
+.imp-ic svg{width:30px;height:30px;fill:none;stroke:var(--red);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.imp-lbl{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--red);margin-bottom:6px}
+.imp-tx{font-size:16px;font-weight:600;color:var(--ink);line-height:1.45;margin-bottom:12px;white-space:pre-wrap}
+.imp-from{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:18px}
+.imp-ok{width:100%;background:linear-gradient(135deg,#e5484d,var(--red));color:#fff;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(220,38,38,.32)}
 </style>
 </head>
 <body>
@@ -601,13 +611,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="grid" id="hubGrid"></div>
   </section>
 
-  <!-- CODES -->
-  <section class="screen" id="s-codes">
-    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
-    <div class="sec-title">Codes d'accès — tournées du jour</div>
-    <div id="codesBody"></div>
-  </section>
-
   <!-- MESSAGES -->
   <section class="screen" id="s-messages">
     <div class="back" onclick="closeMessages()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
@@ -675,22 +678,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div id="entHist"></div>
   </section>
 
-  <!-- ROLLS -->
-  <section class="screen" id="s-rolls">
-    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
-    <div class="sec-title">Rolls — <span id="rollsVeh"></span></div>
-    <div class="glass form-card">
-      <div class="fld-2">
-        <div class="fld"><label>Rolls livrés</label><input id="rollsL" type="number" inputmode="numeric" placeholder="0"></div>
-        <div class="fld"><label>Rolls repris (vides)</label><input id="rollsR" type="number" inputmode="numeric" placeholder="0"></div>
-      </div>
-      <div class="fld"><label>Note (optionnel)</label><textarea id="rollsNote" placeholder="Précision…"></textarea></div>
-      <button class="save-btn" onclick="saveRolls()">Enregistrer</button>
-    </div>
-    <div class="sec-title">Historique</div>
-    <div id="rollsHist"></div>
-  </section>
-
   <!-- FIN DE JOURNÉE -->
   <section class="screen" id="s-fin">
     <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
@@ -755,17 +742,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     </div>
   </section>
 
-  <!-- FIN DE JOURNÉE -->
-  <section class="screen" id="s-end">
-    <div class="login-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:70vh">
-      <div style="width:78px;height:78px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center">
-        <svg viewBox="0 0 24 24" style="width:40px;height:40px;stroke:#fff;fill:none;stroke-width:3"><path d="M20 6L9 17l-5-5"/></svg>
-      </div>
-      <h2 style="color:var(--navy);margin-top:16px">Journée terminée</h2>
-      <p style="color:var(--sub);font-size:14px;max-width:250px;line-height:1.5">Pense à désinfecter la caisse. Tu peux fermer l'application. À demain&nbsp;!</p>
-    </div>
-  </section>
-
   <!-- DÉBRIEF FIN DE JOURNÉE -->
   <section class="screen" id="s-debrief">
     <div class="sec-title">Fin de journée — <span id="debVeh"></span></div>
@@ -794,6 +770,17 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 
 <!-- TOAST (in-app) -->
 <div class="toast" id="toast"><span id="toastIc"></span><span id="toastMsg"></span></div>
+
+<!-- POPUP MESSAGE IMPORTANT (bloquante, hors messagerie) -->
+<div class="imp-ov" id="impOv">
+  <div class="imp-card">
+    <div class="imp-ic"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17v.5"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+    <div class="imp-lbl">Message important</div>
+    <div class="imp-tx" id="impTx"></div>
+    <div class="imp-from" id="impFrom"></div>
+    <button class="imp-ok" id="impOk" onclick="ackImportant()">J'ai compris</button>
+  </div>
+</div>
 
 <!-- BANDEAU MESSAGE NON LU (overlay global, tous écrans sauf messagerie) -->
 <div class="msg-pill" id="msgPill" onclick="openMsgPill()">
@@ -1072,18 +1059,22 @@ async function pickVehicule(id){
       if(isOn('hub'))renderHub();
     },err=>{console.warn('statuts',err);renderJournee();});
 
-  attachMessages();
+  if(!S.unsubIn)attachMessages();
   renderJournee();
   await loadTaches();
   renderHub();
-  // Prise de poste : état des lieux obligatoire (1×/jour/camion)
-  if(edlDoneToday()) enterHub();
-  else openEdl(true);
+  // Prise de poste : état des lieux + chargement obligatoires (1×/jour/camion)
+  if(!edlDoneToday()) openEdl(true);
+  else if(!chargeDoneToday()) openCharge(true);
+  else enterHub();
 }
 function enterHub(){ go('hub'); startGeo(); }
 function edlKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
 function edlDoneToday(){ try{return localStorage.getItem(edlKey())==='1';}catch(e){return false;} }
 function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
+function chargeKey(){ return 'charge_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
+function chargeDoneToday(){ try{return localStorage.getItem(chargeKey())==='1';}catch(e){return false;} }
+function markChargeDone(){ try{localStorage.setItem(chargeKey(),'1');}catch(e){} }
 
 /* ---------- JOURNEE ---------- */
 function statutArret(num,ordre){
@@ -1245,7 +1236,11 @@ function checkDepotReturn(lat,lng){
   if(!_depotLL||_finPrompted)return;
   const dd=geoDist(_depotLL[0],_depotLL[1],lat,lng);
   if(dd>300){_leftDepot=true;return;}        // parti en tournée
-  if(_leftDepot&&dd<150){_finPrompted=true;uiToast('De retour au dépôt','ok');openFin();} // retour → clôture
+  if(_leftDepot&&dd<150){                     // retour au dépôt
+    _finPrompted=true;
+    if(isOn('hub')||isOn('jour')||isOn('carte')){uiToast('De retour au dépôt','ok');openFin();}
+    else uiToast('De retour au dépôt — pense à clôturer ta journée','ok'); // ne pas couper une saisie en cours
+  }
 }
 let _geoTries=0;
 function onGeoErr(e){
@@ -1593,6 +1588,7 @@ function renderCharge(){
 async function confirmCharge(){
   if(_chargeSaveT){clearTimeout(_chargeSaveT);_chargeSaveT=null;}
   await saveCharge();
+  markChargeDone();
   uiToast('Fiche de contrôle mise à jour','ok');
   _chargeMandatory=false;
   enterHub();
@@ -1647,7 +1643,6 @@ function renderControle(){
 
 const MODULES=[
  {id:'jour',label:'Ma tournée',col:'',ic:'<path d="M9 20l-5-2V4l5 2 6-2 5 2v14l-5-2-6 2z"/><path d="M9 6v14M15 4v14"/>'},
- {id:'codes',label:"Codes d'accès",col:'c-tool',ic:'<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'},
  {id:'messages',label:'Messagerie',col:'c-msg',ic:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'},
  {id:'alertes',label:'Alertes',col:'c-alert',ic:'<path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/>'},
  {id:'taches',label:'Tâches',col:'c-ok',ic:'<path d="M19 11l-7 7-4-4"/><path d="M5 21V9l7-6 7 6"/>'},
@@ -1661,20 +1656,19 @@ const MODULES=[
  {id:'rapport',label:'Rapport circonstancié',col:'c-doc',ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>'},
  {id:'edl',label:'Déclaration sinistre / dégât',col:'c-cam',ic:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'},
  {id:'km',label:'Kilométrage',col:'c-km',ic:'<circle cx="12" cy="12" r="9"/><path d="M12 12l4-2"/>'},
- {id:'rolls',label:'Rolls',col:'c-day',ic:'<rect x="3" y="3" width="18" height="14" rx="1"/><circle cx="8" cy="20" r="1.5"/><circle cx="16" cy="20" r="1.5"/>'},
  {id:'fin',label:'Fin de journée',col:'c-load',ic:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'}
 ];
 const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
- {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','controle','arrete']},
+ {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','controle','arrete','taches']},
  {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes']},
  {type:'folder',fid:'sig',label:'Signaler',items:['rapport','edl']},
- {type:'folder',fid:'day',label:'Ma journée',items:['taches','fin','codes']},
+ {type:'direct',id:'fin',label:'Fin de journée'},
  {type:'direct',id:'planning',label:'Mon planning'}
 ];
 function modOf(id){return MODULES.find(m=>m.id===id);}
 function appHtml(m,cls){return `<div class="app ${m.col} ${cls||''}"><svg viewBox="0 0 24 24">${m.ic}</svg></div>`;}
-function folderBadge(fid,unread,pend){if(fid==='msg')return unread;if(fid==='day'){if(new Date().getDay()===4&&pend)return '!';return pend;}return 0;}
+function folderBadge(fid,unread,pend){if(fid==='msg')return unread;if(fid==='veh'){if(new Date().getDay()===4&&pend)return '!';return pend;}return 0;}
 
 function renderHub(){
   document.getElementById('hubAva').textContent=(S.chauffeur.prenom||ini(S.chauffeur.nom,S.chauffeur.prenom));
@@ -1739,18 +1733,15 @@ function tapDirect(tile,id){
 
 function openModule(id){
   if(id==='jour'){go('jour');return;}
-  if(id==='codes'){renderCodes();go('codes');return;}
   if(id==='messages'){openMessages();return;}
   if(id==='alertes'){renderAlertes();go('alertes');return;}
   if(id==='taches'){openTaches();return;}
-  if(id==='charge'){openCharge();return;}
   if(id==='controle'){openControle();return;}
   if(id==='arrete'){openUrl('arrete-circulation-16-04-2021.pdf');return;}
   if(id==='planning'){if(PLANNING_URL)openUrl(PLANNING_URL);else uiToast('Lien planning à configurer','err');return;}
   if(id==='carburant'){openCarburant();return;}
   if(id==='km'){openKm();return;}
   if(id==='entretien'){openEntretien();return;}
-  if(id==='rolls'){openRolls();return;}
   if(id==='fin'){openFin();return;}
   if(id==='anomalies'){openAno();return;}
   if(id==='rapport'){openRap();return;}
@@ -1758,23 +1749,17 @@ function openModule(id){
 }
 
 /* ===== CODES (0 read — depuis S.tournees déjà chargé) ===== */
-function renderCodes(){
-  let h='';
-  S.tournees.forEach(t=>{
-    h+=`<div class="tgroup"><span>Tournée ${t.numero}</span><span class="hr"></span><span>${(t.arrets||[]).length}</span></div>`;
-    (t.arrets||[]).forEach(a=>{
-      h+=`<div class="glass code-row"><div class="ord">${a.ordre}</div>
-        <div class="ci"><b>${a.client}</b><div class="a">${a.adresse||''}</div></div>
-        <span class="cc ${a.acces?'':'empty'}">${a.acces||'—'}</span></div>`;
-    });
-  });
-  document.getElementById('codesBody').innerHTML=h;
-}
-
 /* ===== MESSAGES (2 listeners reçus/envoyés — badge + bandeau + fil) ===== */
 function isOn(id){return document.getElementById('s-'+id).classList.contains('on');}
 let _msgIn={}, _msgOut={};
 let _knownIn={}, _msgInPrimed=false;
+let _impQueue=[], _impShowing=false, _impQueued={}, _impDone={};
+try{
+  const raw=JSON.parse(localStorage.getItem('imp_done')||'{}');
+  const cutoff=Date.now()-30*86400000;
+  if(Array.isArray(raw)){ raw.forEach(id=>_impDone[id]=Date.now()); }      // ancien format (liste d'ids)
+  else { Object.keys(raw).forEach(id=>{ if(raw[id]>cutoff) _impDone[id]=raw[id]; }); } // purge > 30 j
+}catch(e){}
 function lastReadKey(convo){return 'chf_msgread_'+S.chauffeur.id+'_'+convo;}
 function getLastRead(convo){try{return parseInt(localStorage.getItem(lastReadKey(convo))||'0',10)||0;}catch(e){return 0;}}
 function setLastRead(convo,ts){try{localStorage.setItem(lastReadKey(convo),String(ts));}catch(e){}}
@@ -1815,6 +1800,11 @@ function attachMessages(){
         _msgInPrimed=true;
         mergeMsgs();
         if(fresh>0 && !isOn('messages')) showMsgPill(unreadCount());
+        // messages importants non encore acquittés par ce chauffeur -> popup bloquante (hors messagerie)
+        Object.values(_msgIn).forEach(m=>{
+          if(m.important && !(m.lus && m.lus[me]) && !_impDone[m.id] && !_impQueued[m.id]){ _impQueued[m.id]=1; _impQueue.push(m); }
+        });
+        showNextImportant();
       },
       err=>console.warn('msg-in',err));
   // envoyés : ses propres messages (vers responsable / collègue / tous)
@@ -1824,6 +1814,26 @@ function attachMessages(){
       err=>console.warn('msg-out',err));
 }
 function detachMessages(){ if(S.unsubIn){S.unsubIn();S.unsubIn=null;} if(S.unsubOut){S.unsubOut();S.unsubOut=null;} }
+/* ---- Popup message important (bloquante) + accusé de lecture ---- */
+function _impDate(at){ const d=new Date(at||Date.now()); return d.getHours()+'h'+String(d.getMinutes()).padStart(2,'0'); }
+function showNextImportant(){
+  if(_impShowing) return;
+  const m=_impQueue.shift();
+  if(!m) return;
+  _impShowing=m;
+  document.getElementById('impTx').textContent=m.text||'';
+  document.getElementById('impFrom').textContent=(m.fromName||'Responsable')+' · '+_impDate(m.at);
+  try{ playBell(); }catch(e){}
+  document.getElementById('impOv').classList.add('on');
+}
+async function ackImportant(){
+  const m=_impShowing; if(!m) return;
+  _impDone[m.id]=Date.now(); try{ localStorage.setItem('imp_done',JSON.stringify(_impDone)); }catch(e){}
+  document.getElementById('impOv').classList.remove('on');
+  _impShowing=false;
+  try{ await db.collection('chauffeurs_messages').doc(m.id).update({ ['lus.'+S.chauffeur.id]:Date.now() }); }catch(e){ console.warn('ack important',e); }
+  setTimeout(showNextImportant,250);
+}
 let _pillT=null;
 function showMsgPill(n){
   if(!n||n<1)return;
@@ -2069,26 +2079,6 @@ async function saveEntretien(){
 }
 
 /* --- Rolls --- */
-function openRolls(){
-  document.getElementById('rollsVeh').textContent=S.vehicule.id;
-  document.getElementById('rollsL').value='';document.getElementById('rollsR').value='';document.getElementById('rollsNote').value='';
-  go('rolls');
-  loadHist('chauffeurs_rolls','rollsHist',r=>`<div class="glass hist-row">
-    <div class="h1"><b>${r.livres||0} livrés · ${r.repris||0} repris</b><span class="dt">${frDate(r)}</span></div>
-    ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}</div>`);
-}
-async function saveRolls(){
-  const L=parseInt(document.getElementById('rollsL').value,10)||0;
-  const R=parseInt(document.getElementById('rollsR').value,10)||0;
-  if(L<=0&&R<=0){uiToast('Indique au moins un nombre','err');return;}
-  const note=(document.getElementById('rollsNote').value||'').trim();
-  const ok=await uiConfirm('Enregistrer les rolls',L+' livrés · '+R+' repris sur '+S.vehicule.id+' ?','Enregistrer');
-  if(!ok)return;
-  try{
-    await db.collection('chauffeurs_rolls').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,livres:L,repris:R,note,at:Date.now()});
-    uiToast('Rolls enregistrés','ok');openRolls();
-  }catch(e){uiToast('Échec enregistrement','err');}
-}
 
 /* --- Fin de journée --- */
 const FIN_ITEMS=['Tournée terminée','Rolls comptés','Véhicule rangé et propre','Anomalies signalées'];
@@ -2148,14 +2138,6 @@ function backToVehicule(){
   renderVehicules();
   go('veh');
 }
-function endApp(){
-  try{stopGeo();}catch(e){}
-  try{detachMessages();}catch(e){}
-  try{hideMsgPill();}catch(e){}
-  if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
-  go('end');
-  try{window.close();}catch(e){}
-}
 
 /* ===== PHOTOS — compression + upload Drive → URLs Firestore ===== */
 const PH={}; // bucket -> [{data,type}]
@@ -2196,10 +2178,6 @@ async function uploadPhotos(category,refId,photos){
     const j=await res.json();
     return (j&&j.ok&&j.urls)?j.urls:[];
   }catch(e){console.warn('upload photos',e);return [];}
-}
-function photoHist(urls){
-  if(!urls||!urls.length)return '';
-  return '<div class="hist-ph">'+urls.map(u=>`<a href="${u.url}" target="_blank" rel="noopener"><img src="${u.url}" loading="lazy"></a>`).join('')+'</div>';
 }
 function busy(msg){document.getElementById('busyMsg').textContent=msg||'Envoi…';document.getElementById('busy').classList.add('show');}
 function busyDone(){document.getElementById('busy').classList.remove('show');}
