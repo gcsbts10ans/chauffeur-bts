@@ -451,6 +451,12 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .msg-pill .mp-tx small{display:block;font-size:11px;font-weight:500;opacity:.8;margin-top:1px}
 .msg-pill .mp-chev{width:16px;height:16px;opacity:.85}
 .msg-pill .mp-dot{width:8px;height:8px;border-radius:50%;background:#fff;flex-shrink:0;display:inline-block}
+.edl-gate{background:#fff4e5;border:1px solid #f0c987;color:#8a5a00;border-radius:14px;padding:12px 14px;font-size:14px;font-weight:600;line-height:1.45;margin-bottom:14px}
+.chg-q{font-size:16px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px}
+.ano-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:13px;border:1px solid #f1c0c0;background:#fdecec;color:var(--red);border-radius:14px;font-size:15px;font-weight:700;cursor:pointer}
+.ano-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+.ctrl-deroge{font-size:13px;line-height:1.55;color:var(--ink);text-align:justify;background:rgba(30,60,114,.05);border-left:3px solid var(--navy);border-radius:8px;padding:10px 12px}
+.save-btn.alt{background:var(--glass-strong);color:var(--navy);border:1px solid #c4cede}
 @keyframes pop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
 .modal-ic{width:56px;height:56px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,var(--navy),var(--navy2));box-shadow:0 10px 24px rgba(30,60,114,.3)}
@@ -570,7 +576,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 
   <!-- CHARGEMENT -->
   <section class="screen" id="s-charge">
-    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="back" id="chargeBack" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Chargement / Poids</div>
     <div id="chargeBody"></div>
   </section>
@@ -633,10 +639,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="sec-title">Carburant / AdBlue — <span id="carbVeh"></span></div>
     <div class="glass form-card">
       <div class="fld"><label>Type de plein</label><div class="sel-wrap"><select id="carbType"><option value="Gasoil">Gasoil</option><option value="AdBlue">AdBlue</option></select></div></div>
-      <div class="fld-2">
-        <div class="fld"><label>Litres</label><input id="carbL" type="number" inputmode="decimal" placeholder="0"></div>
-        <div class="fld"><label>Montant €</label><input id="carbM" type="number" inputmode="decimal" placeholder="0"></div>
-      </div>
+      <div class="fld"><label>Litres</label><input id="carbL" type="number" inputmode="decimal" placeholder="0"></div>
       <div class="fld"><label>Km au compteur</label><input id="carbKm" type="number" inputmode="numeric" placeholder="0"></div>
       <button class="save-btn" onclick="saveCarburant()">Enregistrer le plein</button>
     </div>
@@ -704,7 +707,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 
   <!-- ANOMALIES -->
   <section class="screen" id="s-anomalies">
-    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="back" onclick="anoBack()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Anomalie tournée — <span id="anoVeh"></span></div>
     <div class="glass form-card">
       <div class="fld"><label>Nature</label><div class="sel-wrap"><select id="anoType"></select></div></div>
@@ -736,21 +739,41 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 
   <!-- ÉTAT DES LIEUX -->
   <section class="screen" id="s-edl">
-    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
-    <div class="sec-title">État des lieux — <span id="edlVeh"></span></div>
+    <div class="back" id="edlBack" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="sec-title">Déclaration sinistre / dégât — <span id="edlVeh"></span></div>
+    <div id="edlGate" class="edl-gate" style="display:none"><b>Déclaration sinistre / dégât obligatoire</b> avant de commencer votre tournée.<br>Merci de signaler le moindre problème.</div>
     <div class="glass form-card">
       <div class="fld"><label>Remarque générale (optionnel)</label><textarea id="edlRem" placeholder="État du véhicule, observations…"></textarea></div>
-      <div class="sub-lbl">Photos avant</div>
-      <input type="file" id="edlFileAv" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('edlAv',this,'edlThumbsAv')">
-      <button type="button" class="photo-btn" onclick="document.getElementById('edlFileAv').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
-      <div class="thumbs" id="edlThumbsAv"></div>
-      <div class="sub-lbl">Photos après</div>
-      <input type="file" id="edlFileAp" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('edlAp',this,'edlThumbsAp')">
-      <button type="button" class="photo-btn" onclick="document.getElementById('edlFileAp').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
-      <div class="thumbs" id="edlThumbsAp"></div>
+      <div class="sub-lbl">Photos (3 max)</div>
+      <input type="file" id="edlFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('edl',this,'edlThumbs')">
+      <button type="button" class="photo-btn" onclick="document.getElementById('edlFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
+      <div class="thumbs" id="edlThumbs"></div>
       <div class="sub-lbl">Signature</div>
       <div class="sig-wrap"><canvas id="edlSig"></canvas><button type="button" class="sig-clear" onclick="clearSig()">Effacer</button></div>
-      <button class="save-btn" style="margin-top:16px" onclick="saveEdl()">Valider l'état des lieux</button>
+      <button class="save-btn" style="margin-top:16px" onclick="saveEdl()">Valider la déclaration</button>
+      <button class="save-btn alt" style="margin-top:10px" onclick="saveNoDamage()">Aucun dommage à signaler</button>
+    </div>
+  </section>
+
+  <!-- FIN DE JOURNÉE -->
+  <section class="screen" id="s-end">
+    <div class="login-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:70vh">
+      <div style="width:78px;height:78px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 24 24" style="width:40px;height:40px;stroke:#fff;fill:none;stroke-width:3"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h2 style="color:var(--navy);margin-top:16px">Journée terminée</h2>
+      <p style="color:var(--sub);font-size:14px;max-width:250px;line-height:1.5">Pense à désinfecter la caisse. Tu peux fermer l'application. À demain&nbsp;!</p>
+    </div>
+  </section>
+
+  <!-- DÉBRIEF FIN DE JOURNÉE -->
+  <section class="screen" id="s-debrief">
+    <div class="sec-title">Fin de journée — <span id="debVeh"></span></div>
+    <div class="glass form-card">
+      <div class="sub-lbl">Une anomalie à signaler ?</div>
+      <button type="button" class="ano-btn" style="margin-top:4px" onclick="anoFromDebrief()"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/></svg> Signaler une anomalie</button>
+      <div class="fld" style="margin-top:16px"><label>Remarque pour le responsable (optionnel)</label><textarea id="debNote" placeholder="Un mot pour le responsable…"></textarea></div>
+      <button class="save-btn" style="margin-top:8px" onclick="finishDay()">Fin de journée</button>
     </div>
   </section>
 
@@ -838,7 +861,7 @@ const SOCIETE={
   nom:'GCS Blanchisserie Toulousaine de Santé',
   siret:'130 021 629 00014',
   adresse:'ZI du Chapitre, 20 av. Larrieu Thibaud, 31100 Toulouse',
-  transport:'Transport en compte propre (linge)' // ← à confirmer
+  transport:'Transport en compte propre (linge)'
 };
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw-chauffeur.js').catch(()=>{});}
 let CHAUFFEURS=[], VEHICULES=[];
@@ -869,6 +892,18 @@ function uiConfirm(title,msg,okLabel){
     ok.onclick=()=>close(true);
     ca.onclick=()=>close(false);
     ov.onclick=e=>{if(e.target===ov)close(false);};
+    ov.classList.add('on');
+  });
+}
+function uiAlert(title,msg,okLabel){
+  return new Promise(res=>{
+    document.getElementById('modalTitle').textContent=title;
+    document.getElementById('modalMsg').textContent=msg;
+    document.getElementById('modalOk').textContent=okLabel||'OK';
+    const ov=document.getElementById('modal'),ok=document.getElementById('modalOk'),ca=document.getElementById('modalCancel');
+    ca.style.display='none';ov.onclick=null;
+    function close(){ov.classList.remove('on');ok.onclick=null;ca.style.display='';res();}
+    ok.onclick=close;
     ov.classList.add('on');
   });
 }
@@ -1041,9 +1076,14 @@ async function pickVehicule(id){
   renderJournee();
   await loadTaches();
   renderHub();
-  go('hub');
-  startGeo();
+  // Prise de poste : état des lieux obligatoire (1×/jour/camion)
+  if(edlDoneToday()) enterHub();
+  else openEdl(true);
 }
+function enterHub(){ go('hub'); startGeo(); }
+function edlKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
+function edlDoneToday(){ try{return localStorage.getItem(edlKey())==='1';}catch(e){return false;} }
+function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
 
 /* ---------- JOURNEE ---------- */
 function statutArret(num,ordre){
@@ -1100,6 +1140,7 @@ function openStop(num,ordre){
     <button class="scan-btn" onclick="scanStop('qr')"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M4 12h16"/></svg>
       <div><b>Scanner le QR du site</b><span>Valider la dépose chez l'adhérent</span></div></button>
     <button class="manual" onclick="scanStop('manuel')">Pas de QR — valider manuellement</button>`}
+    <button class="ano-btn" onclick="openAno('${(a.client||'').replace(/'/g,"\\'")}')"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/></svg> Signaler une anomalie</button>
   `;
   go('det');
 }
@@ -1181,9 +1222,11 @@ function setGeoLine(state,txt){
   el.className='geo-line '+state;
   el.innerHTML='<span class="geo-dot"></span>'+txt;
 }
+let _depotLL=null,_depotTried=false,_leftDepot=false,_finPrompted=false;
 function startGeo(){
   if(!('geolocation' in navigator)){setGeoLine('off','Localisation indisponible');return;}
   if(_geoWatch!==null)return; // déjà actif
+  if(!_depotTried){_depotTried=true;cGeocode(BTS_DEPOT).then(ll=>{if(ll)_depotLL=ll;});}
   setGeoLine('wait','Activation de la localisation…');
   _geoWatch=navigator.geolocation.watchPosition(onGeo,onGeoErr,{enableHighAccuracy:true,maximumAge:30000,timeout:25000});
 }
@@ -1191,11 +1234,18 @@ function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWat
 function onGeo(pos){
   const lat=pos.coords.latitude, lng=pos.coords.longitude, acc=pos.coords.accuracy;
   setGeoLine('on','Position partagée');
+  checkDepotReturn(lat,lng);
   const now=Date.now();
   const moved=(_geoLast.lat!=null)?geoDist(_geoLast.lat,_geoLast.lng,lat,lng):1e9;
   if(now-_geoLast.t<90000 && moved<200)return; // throttle 90 s / 200 m → coût Firestore minimal
   _geoLast={t:now,lat,lng};
   pushPosition(lat,lng,acc);
+}
+function checkDepotReturn(lat,lng){
+  if(!_depotLL||_finPrompted)return;
+  const dd=geoDist(_depotLL[0],_depotLL[1],lat,lng);
+  if(dd>300){_leftDepot=true;return;}        // parti en tournée
+  if(_leftDepot&&dd<150){_finPrompted=true;uiToast('De retour au dépôt','ok');openFin();} // retour → clôture
 }
 let _geoTries=0;
 function onGeoErr(e){
@@ -1473,7 +1523,7 @@ function cEmergencyMaps(){
 const TACHES=[
   {id:'cabine', label:'Nettoyage intérieur cabine', jour:4, portee:'tous'},
   {id:'caisse', label:'Lavage extérieur caisse',     jour:4, portee:'tous'},
-  {id:'reforme',label:'Gestion de la réforme',       jour:4, portee:'tournee', tournee:'83'}
+  {id:'reforme',label:'Gestion de la réforme',       jour:4, portee:'tournee', tournee:'82'}
 ];
 const JOURS_FR=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
 let TACHE_DONE=new Set(),CUR_WEEK='';
@@ -1512,38 +1562,40 @@ async function markTache(id){
 }
 
 /* ===== CHARGEMENT / POIDS (fiche contrôle) ===== */
-const ROLL_KG=80;
-const VEH_CHARGE={}; // charge utile (kg) par immatriculation — à remplir, ex {'GW-747-NB':2000}
+const ROLL_KG=250;
 let CHARGE={rolls:0},_chargeSaveT=null;
-function vehChargeMax(){return VEH_CHARGE[S.vehicule.id]||(S.vehicule&&S.vehicule.chargeUtile)||null;}
-async function openCharge(){
+let _chargeMandatory=false;
+async function openCharge(mandatory){
+  _chargeMandatory=!!mandatory;
   go('charge');
+  const bk=document.getElementById('chargeBack');if(bk)bk.style.display=_chargeMandatory?'none':'';
   document.getElementById('chargeBody').innerHTML='<div class="msg-empty">Chargement…</div>';
   try{const d=await db.collection('chauffeurs_chargement').doc(TODAY+'_'+S.vehicule.id).get();CHARGE={rolls:(d.exists&&d.data().rolls)||0};}
   catch(e){CHARGE={rolls:0};}
   renderCharge();
 }
 function renderCharge(){
-  const n=CHARGE.rolls||0,poids=n*ROLL_KG,max=vehChargeMax();
-  let status='';
-  if(max){
-    const over=poids>max,pct=Math.min(100,Math.round(poids/max*100));
-    status=`<div class="chg-bar"><i style="width:${pct}%;background:${over?'var(--red)':'var(--green)'}"></i></div>
-      <div class="chg-stat ${over?'over':'ok'}">${over?'DÉPASSEMENT de '+(poids-max)+' kg':'Reste '+(max-poids)+' kg avant la limite'}</div>`;
-  }else status='<div class="chg-stat none">Charge utile non renseignée</div>';
+  const n=CHARGE.rolls||0,poids=n*ROLL_KG;
   document.getElementById('chargeBody').innerHTML=`
     <div class="glass chg-card">
+      ${_chargeMandatory?'<div class="chg-q">Combien avez-vous de rolls embarqués ?</div>':''}
       <div class="chg-veh"><b>${S.vehicule.id}</b><span>${S.vehicule.type||''}${S.vehicule.prestataire?' · '+S.vehicule.prestataire:''}</span></div>
-      <div class="chg-line"><span>Charge utile max</span><b>${max?max+' kg':'—'}</b></div>
       <div class="chg-step">
         <button onclick="changeRolls(-1)">−</button>
         <div class="chg-n"><b>${n}</b><span>rolls à bord</span></div>
         <button onclick="changeRolls(1)">+</button>
       </div>
       <div class="chg-poids">Poids estimé<br><b>${poids} kg</b></div>
-      ${status}
       <div class="chg-note">Estimation : 1 roll ≈ ${ROLL_KG} kg. Ce n'est pas un pesage certifié — le poids légal réel se mesure au pont-bascule.</div>
+      ${_chargeMandatory?'<button class="save-btn" style="margin-top:14px" onclick="confirmCharge()">Démarrer la tournée</button>':''}
     </div>`;
+}
+async function confirmCharge(){
+  if(_chargeSaveT){clearTimeout(_chargeSaveT);_chargeSaveT=null;}
+  await saveCharge();
+  uiToast('Fiche de contrôle mise à jour','ok');
+  _chargeMandatory=false;
+  enterHub();
 }
 function changeRolls(d){CHARGE.rolls=Math.max(0,(CHARGE.rolls||0)+d);renderCharge();if(_chargeSaveT)clearTimeout(_chargeSaveT);_chargeSaveT=setTimeout(saveCharge,700);}
 async function saveCharge(){
@@ -1560,7 +1612,7 @@ function openControle(){
     .catch(()=>renderControle());
 }
 function renderControle(){
-  const n=CHARGE.rolls||0,poids=n*ROLL_KG,max=vehChargeMax();
+  const n=CHARGE.rolls||0,poids=n*ROLL_KG;
   const tlist=S.tournees.map(t=>'T'+t.numero).join(' + ');
   const now=new Date().toLocaleString('fr-FR',{dateStyle:'long',timeStyle:'short'});
   document.getElementById('controleBody').innerHTML=`
@@ -1585,7 +1637,9 @@ function renderControle(){
        <div class="ctrl-r"><span>Marchandise</span><b>Linge (blanchisserie)</b></div>
        <div class="ctrl-r"><span>Rolls à bord</span><b>${n}</b></div>
        <div class="ctrl-r"><span>Poids estimé</span><b>${poids} kg</b></div>
-       <div class="ctrl-r"><span>Charge utile max</span><b>${max?max+' kg':'—'}</b></div>
+     </div>
+     <div class="ctrl-sec"><div class="ctrl-t">Dérogation week-end / jours fériés</div>
+       <div class="ctrl-deroge">« Les véhicules transportant des déchets hospitaliers, du linge et des marchandises nécessaires au fonctionnement des établissements de santé publics ou privés et des établissements d'hébergement pour personnes âgées dépendantes ou de marchandises à caractère médical ou de protection sanitaire » ne sont pas concernés par l'interdiction de circuler les week-ends et jours fériés, conformément à l'article 4-I-9 de l'arrêté du 16 avril 2021.</div>
      </div>
      <div class="ctrl-note">Estimation du poids (1 roll ≈ ${ROLL_KG} kg), non certifiée. Documents officiels à bord : carte grise, attestation d'assurance, contrat de location, permis (+ carte conducteur et chrono pour les PL).</div>
    </div>`;
@@ -1599,27 +1653,28 @@ const MODULES=[
  {id:'taches',label:'Tâches',col:'c-ok',ic:'<path d="M19 11l-7 7-4-4"/><path d="M5 21V9l7-6 7 6"/>'},
  {id:'charge',label:'Chargement',col:'c-load',ic:'<path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 7l-3 7a3 3 0 0 0 6 0z"/><path d="M17 7l3 7a3 3 0 0 1-6 0z"/>'},
  {id:'controle',label:'Fiche contrôle',col:'c-ok',ic:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'},
+ {id:'arrete',label:'Arrêté circulation',col:'c-doc',ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>'},
  {id:'planning',label:'Mon planning',col:'c-doc',ic:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'},
  {id:'entretien',label:'Entretien',col:'c-tool',ic:'<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.7-5.3a4 4 0 0 0 5.4-5.4l-2.4-2.4z"/>'},
  {id:'carburant',label:'Carburant AdBlue',col:'c-fuel',ic:'<path d="M4 20V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15M3 20h12"/><path d="M14 9h3l3 3v5a2 2 0 0 1-4 0V9"/>'},
  {id:'anomalies',label:'Anomalie',col:'c-alert',ic:'<path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/>'},
- {id:'rapport',label:'Rapport',col:'c-doc',ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>'},
- {id:'edl',label:'État des lieux',col:'c-cam',ic:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'},
+ {id:'rapport',label:'Rapport circonstancié',col:'c-doc',ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>'},
+ {id:'edl',label:'Déclaration sinistre / dégât',col:'c-cam',ic:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'},
  {id:'km',label:'Kilométrage',col:'c-km',ic:'<circle cx="12" cy="12" r="9"/><path d="M12 12l4-2"/>'},
  {id:'rolls',label:'Rolls',col:'c-day',ic:'<rect x="3" y="3" width="18" height="14" rx="1"/><circle cx="8" cy="20" r="1.5"/><circle cx="16" cy="20" r="1.5"/>'},
  {id:'fin',label:'Fin de journée',col:'c-load',ic:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'}
 ];
 const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
- {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','charge','controle']},
+ {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','controle','arrete']},
  {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes']},
- {type:'folder',fid:'sig',label:'Signaler',items:['anomalies','rapport','edl']},
- {type:'folder',fid:'day',label:'Ma journée',items:['rolls','taches','fin','codes']},
+ {type:'folder',fid:'sig',label:'Signaler',items:['rapport','edl']},
+ {type:'folder',fid:'day',label:'Ma journée',items:['taches','fin','codes']},
  {type:'direct',id:'planning',label:'Mon planning'}
 ];
 function modOf(id){return MODULES.find(m=>m.id===id);}
 function appHtml(m,cls){return `<div class="app ${m.col} ${cls||''}"><svg viewBox="0 0 24 24">${m.ic}</svg></div>`;}
-function folderBadge(fid,unread,pend){if(fid==='msg')return unread;if(fid==='day')return pend;return 0;}
+function folderBadge(fid,unread,pend){if(fid==='msg')return unread;if(fid==='day'){if(new Date().getDay()===4&&pend)return '!';return pend;}return 0;}
 
 function renderHub(){
   document.getElementById('hubAva').textContent=(S.chauffeur.prenom||ini(S.chauffeur.nom,S.chauffeur.prenom));
@@ -1690,6 +1745,7 @@ function openModule(id){
   if(id==='taches'){openTaches();return;}
   if(id==='charge'){openCharge();return;}
   if(id==='controle'){openControle();return;}
+  if(id==='arrete'){openUrl('arrete-circulation-16-04-2021.pdf');return;}
   if(id==='planning'){if(PLANNING_URL)openUrl(PLANNING_URL);else uiToast('Lien planning à configurer','err');return;}
   if(id==='carburant'){openCarburant();return;}
   if(id==='km'){openKm();return;}
@@ -1928,25 +1984,27 @@ async function loadHist(coll,elId,rowFn){
 }
 
 /* --- Carburant --- */
+function curKm(){try{return localStorage.getItem('km_'+TODAY)||'';}catch(e){return '';}}
+function setCurKm(v){if(v)try{localStorage.setItem('km_'+TODAY,String(v));}catch(e){}}
 function openCarburant(){
   document.getElementById('carbVeh').textContent=S.vehicule.id;
   document.getElementById('carbType').value='Gasoil';
-  document.getElementById('carbL').value='';document.getElementById('carbM').value='';document.getElementById('carbKm').value='';
+  document.getElementById('carbL').value='';document.getElementById('carbKm').value=curKm();
   go('carburant');
   loadHist('chauffeurs_carburant','carbHist',r=>`<div class="glass hist-row">
     <div class="h1"><b>${r.litres} L</b><span class="dt">${frDate(r)}</span></div>
-    <div class="meta"><span class="carb-tag ${r.type==='AdBlue'?'ad':''}">${r.type||'Gasoil'}</span>${r.montant?' · '+r.montant+' €':''}${r.km?' · '+r.km+' km':''}</div></div>`);
+    <div class="meta"><span class="carb-tag ${r.type==='AdBlue'?'ad':''}">${r.type||'Gasoil'}</span>${r.km?' · '+r.km+' km':''}</div></div>`);
 }
 async function saveCarburant(){
   const TYPE=document.getElementById('carbType').value||'Gasoil';
   const L=parseFloat(document.getElementById('carbL').value);
   if(!L||L<=0){uiToast('Indique les litres','err');return;}
-  const M=parseFloat(document.getElementById('carbM').value)||null;
   const KM=parseInt(document.getElementById('carbKm').value,10)||null;
-  const ok=await uiConfirm('Enregistrer le plein',TYPE+' · '+L+' L'+(M?' · '+M+' €':'')+' sur '+S.vehicule.id+' ?','Enregistrer');
+  const ok=await uiConfirm('Enregistrer le plein',TYPE+' · '+L+' L'+' sur '+S.vehicule.id+' ?','Enregistrer');
   if(!ok)return;
   try{
-    await db.collection('chauffeurs_carburant').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:TYPE,litres:L,montant:M,km:KM,at:Date.now()});
+    await db.collection('chauffeurs_carburant').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()});
+    setCurKm(KM);
     uiToast(TYPE+' enregistré','ok');openCarburant();
   }catch(e){uiToast('Échec enregistrement','err');}
 }
@@ -1954,7 +2012,7 @@ async function saveCarburant(){
 /* --- Kilométrage (avec distance vs relevé précédent) --- */
 function openKm(){
   document.getElementById('kmVeh').textContent=S.vehicule.id;
-  document.getElementById('kmVal').value='';
+  document.getElementById('kmVal').value=curKm();
   go('km');
   loadKmHist();
 }
@@ -1978,6 +2036,7 @@ async function saveKm(){
   if(!ok)return;
   try{
     await db.collection('chauffeurs_km').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,km:KM,at:Date.now()});
+    setCurKm(KM);
     uiToast('Relevé enregistré','ok');openKm();
   }catch(e){uiToast('Échec enregistrement','err');}
 }
@@ -1986,7 +2045,7 @@ async function saveKm(){
 const ENTRETIEN_TYPES=['Vidange','Pneus','Révision','Contrôle tech.','Lavage','Autre'];
 function openEntretien(){
   document.getElementById('entVeh').textContent=S.vehicule.id;
-  document.getElementById('entKm').value='';document.getElementById('entNote').value='';
+  document.getElementById('entKm').value=curKm();document.getElementById('entNote').value='';
   const sel=document.getElementById('entType');
   sel.innerHTML='<option value="">— Choisir —</option>'+ENTRETIEN_TYPES.map(t=>`<option>${t}</option>`).join('');
   sel.value='';
@@ -2004,6 +2063,7 @@ async function saveEntretien(){
   if(!ok)return;
   try{
     await db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type,km:KM,note,at:Date.now()});
+    setCurKm(KM);
     uiToast('Entretien enregistré','ok');openEntretien();
   }catch(e){uiToast('Échec enregistrement','err');}
 }
@@ -2034,7 +2094,7 @@ async function saveRolls(){
 const FIN_ITEMS=['Tournée terminée','Rolls comptés','Véhicule rangé et propre','Anomalies signalées'];
 function openFin(){
   document.getElementById('finVeh').textContent=S.vehicule.id;
-  document.getElementById('finKm').value='';document.getElementById('finNote').value='';
+  document.getElementById('finKm').value=curKm();document.getElementById('finNote').value='';
   document.getElementById('finChk').innerHTML=FIN_ITEMS.map(t=>`
     <div class="chk-row"><span class="lbl">${t}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
@@ -2055,8 +2115,46 @@ async function saveFin(){
   if(!ok)return;
   try{
     await db.collection('chauffeurs_checklist_fin').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,items,kmFinal:KM,note,at:Date.now()});
-    uiToast('Journée clôturée','ok');openFin();
+    setCurKm(KM);
+    await uiAlert('Fin de journée','Pense à désinfecter la caisse avant de partir.','Oui');
+    openDebrief();
   }catch(e){uiToast('Échec clôture','err');}
+}
+let _debriefReturn=false;
+function openDebrief(){
+  document.getElementById('debVeh').textContent=S.vehicule.id;
+  document.getElementById('debNote').value='';
+  go('debrief');
+}
+function anoFromDebrief(){ _debriefReturn=true; openAno(''); }
+function anoBack(){ if(_debriefReturn){_debriefReturn=false;go('debrief');} else go('hub'); }
+async function finishDay(){
+  const note=(document.getElementById('debNote').value||'').trim();
+  if(note){
+    try{
+      await db.collection('chauffeurs_messages').add({
+        from:S.chauffeur.id, fromName:(S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||''),
+        to:'responsable', text:note, vehicule:S.vehicule.id, at:Date.now()
+      });
+      uiToast('Remarque envoyée au responsable','ok');
+    }catch(e){}
+  }
+  backToVehicule();
+}
+function backToVehicule(){
+  try{stopGeo();}catch(e){}
+  if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
+  _finPrompted=false;_leftDepot=false;_edlMandatory=false;_chargeMandatory=false;
+  renderVehicules();
+  go('veh');
+}
+function endApp(){
+  try{stopGeo();}catch(e){}
+  try{detachMessages();}catch(e){}
+  try{hideMsgPill();}catch(e){}
+  if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
+  go('end');
+  try{window.close();}catch(e){}
 }
 
 /* ===== PHOTOS — compression + upload Drive → URLs Firestore ===== */
@@ -2074,11 +2172,13 @@ function compressPhoto(file,maxW,q){
     r.readAsDataURL(file);
   });
 }
+const PH_MAX={edl:3};
 async function addPhotos(bucket,input,thumbsId){
   PH[bucket]=PH[bucket]||[];
+  const max=PH_MAX[bucket]||6;
   const files=Array.from(input.files||[]);
   for(const f of files){
-    if(PH[bucket].length>=6){uiToast('6 photos maximum','err');break;}
+    if(PH[bucket].length>=max){uiToast(max+' photos maximum','err');break;}
     try{const data=await compressPhoto(f);PH[bucket].push({data,type:bucket});}catch(e){}
   }
   input.value='';
@@ -2106,8 +2206,10 @@ function busyDone(){document.getElementById('busy').classList.remove('show');}
 
 /* --- Anomalies tournée --- */
 const ANO_TYPES=['Accès impossible','Linge manquant','Linge non conforme','Roll/chariot abîmé','Retard livraison','Problème véhicule','Autre'];
-function openAno(){
-  document.getElementById('anoVeh').textContent=S.vehicule.id;
+let _anoSite='';
+function openAno(site){
+  _anoSite=site||'';
+  document.getElementById('anoVeh').textContent=S.vehicule.id+(_anoSite?' · '+_anoSite:'');
   document.getElementById('anoDesc').value='';
   PH['ano']=[];renderThumbs('ano','anoThumbs');
   const sel=document.getElementById('anoType');
@@ -2119,15 +2221,16 @@ async function saveAno(){
   if(!nature){uiToast('Choisis la nature','err');return;}
   const desc=(document.getElementById('anoDesc').value||'').trim();
   const photos=PH['ano']||[];
-  const ok=await uiConfirm('Signaler l\'anomalie',nature+(photos.length?' · '+photos.length+' photo(s)':'')+' sur '+S.vehicule.id+' ?','Signaler');
+  const ok=await uiConfirm('Signaler l\'anomalie',nature+(_anoSite?' · '+_anoSite:'')+(photos.length?' · '+photos.length+' photo(s)':'')+' sur '+S.vehicule.id+' ?','Signaler');
   if(!ok)return;
   busy(photos.length?'Envoi de l\'anomalie…':'Envoi de l\'anomalie…');
   try{
-    const ref=await db.collection('chauffeurs_anomalies').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()});
+    const ref=await db.collection('chauffeurs_anomalies').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()});
     let urls=[];
     if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos);if(urls.length)await ref.update({photos:urls});}
     uiToast(!photos.length?'Anomalie signalée':(urls.length?'Anomalie + photos envoyées':'Anomalie envoyée (photos non transmises)'),(!photos.length||urls.length)?'ok':'err');
-    openAno();
+    if(_debriefReturn){_debriefReturn=false;go('debrief');}
+    else openAno();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
 }
@@ -2175,30 +2278,47 @@ function initSig(){
   c.ontouchstart=start;c.ontouchmove=move;c.ontouchend=end;
 }
 function clearSig(){if(_sigCtx){const c=document.getElementById('edlSig');_sigCtx.clearRect(0,0,c.width,c.height);_sigDirty=false;}}
-function openEdl(){
+let _edlMandatory=false;
+function openEdl(mandatory){
+  _edlMandatory=!!mandatory;
   document.getElementById('edlVeh').textContent=S.vehicule.id;
   document.getElementById('edlRem').value='';
-  PH['edlAv']=[];PH['edlAp']=[];renderThumbs('edlAv','edlThumbsAv');renderThumbs('edlAp','edlThumbsAp');
+  PH['edl']=[];renderThumbs('edl','edlThumbs');
+  document.getElementById('edlGate').style.display=_edlMandatory?'block':'none';
+  document.getElementById('edlBack').style.display=_edlMandatory?'none':'';
   go('edl');
   setTimeout(initSig,80); // le canvas doit être affiché pour être dimensionné
 }
 async function saveEdl(){
   const rem=(document.getElementById('edlRem').value||'').trim();
-  const av=PH['edlAv']||[],ap=PH['edlAp']||[];
-  if(!av.length&&!ap.length&&!_sigDirty&&!rem){uiToast('Ajoute au moins une information','err');return;}
-  const ok=await uiConfirm('Valider l\'état des lieux',(av.length+ap.length)+' photo(s)'+(_sigDirty?' · signé':'')+' sur '+S.vehicule.id+' ?','Valider');
+  const ph=PH['edl']||[];
+  if(!ph.length&&!_sigDirty&&!rem){uiToast('Ajoute au moins une information','err');return;}
+  const ok=await uiConfirm('Valider la déclaration',ph.length+' photo(s)'+(_sigDirty?' · signé':'')+' sur '+S.vehicule.id+' ?','Valider');
   if(!ok)return;
-  busy('Envoi de l\'état des lieux…');
+  busy('Envoi de la déclaration…');
   try{
-    const ref=await db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:rem,photosAvant:[],photosApres:[],signature:null,at:Date.now()});
+    const ref=await db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:rem,photos:[],signature:null,at:Date.now()});
     const patch={};
-    if(av.length){busy('Envoi des photos avant…');const u=await uploadPhotos('edl',ref.id,av.map(p=>({data:p.data,type:'avant'})));if(u.length)patch.photosAvant=u;}
-    if(ap.length){busy('Envoi des photos après…');const u=await uploadPhotos('edl',ref.id,ap.map(p=>({data:p.data,type:'apres'})));if(u.length)patch.photosApres=u;}
+    if(ph.length){busy('Envoi des photos…');const u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)patch.photos=u;}
     if(_sigDirty){busy('Envoi de la signature…');const sig=document.getElementById('edlSig').toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
     if(Object.keys(patch).length)await ref.update(patch);
-    uiToast('État des lieux validé','ok');
-    openEdl();
+    markEdlDone();
+    uiToast('Déclaration enregistrée','ok');
+    if(_edlMandatory){_edlMandatory=false;openCharge(true);}
+    else openEdl();
   }catch(e){uiToast('Échec envoi','err');}
+  finally{busyDone();}
+}
+async function saveNoDamage(){
+  const ok=await uiConfirm('Aucun dommage','Confirmer : aucun dommage à signaler sur '+S.vehicule.id+' ?','Confirmer');
+  if(!ok)return;
+  busy('Enregistrement…');
+  try{
+    await db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()});
+    markEdlDone();
+    uiToast('Déclaration enregistrée','ok');
+    _edlMandatory=false;openCharge(true);
+  }catch(e){uiToast('Échec','err');}
   finally{busyDone();}
 }
 </script>
