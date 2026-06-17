@@ -684,8 +684,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="sec-title">Fin de journée — <span id="finVeh"></span></div>
     <div class="glass form-card">
       <div id="finChk"></div>
-      <div class="fld" style="margin-top:8px"><label>Km final (optionnel)</label><input id="finKm" type="number" inputmode="numeric" placeholder="0"></div>
-      <div class="fld"><label>Remarque (optionnel)</label><textarea id="finNote" placeholder="Quelque chose à signaler…"></textarea></div>
+      <div class="fld" style="margin-top:8px"><label>Remarque (optionnel)</label><textarea id="finNote" placeholder="Quelque chose à signaler…"></textarea></div>
       <button class="save-btn" onclick="saveFin()">Clôturer ma journée</button>
     </div>
     <div class="sec-title">Dernières clôtures</div>
@@ -746,10 +745,20 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
   <section class="screen" id="s-debrief">
     <div class="sec-title">Fin de journée — <span id="debVeh"></span></div>
     <div class="glass form-card">
-      <div class="sub-lbl">Une anomalie à signaler ?</div>
-      <button type="button" class="ano-btn" style="margin-top:4px" onclick="anoFromDebrief()"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/></svg> Signaler une anomalie</button>
-      <div class="fld" style="margin-top:16px"><label>Remarque pour le responsable (optionnel)</label><textarea id="debNote" placeholder="Un mot pour le responsable…"></textarea></div>
+      <div class="fld"><label>Remarque pour le responsable (optionnel)</label><textarea id="debNote" placeholder="Un mot pour le responsable…"></textarea></div>
       <button class="save-btn" style="margin-top:8px" onclick="finishDay()">Fin de journée</button>
+    </div>
+  </section>
+
+  <!-- JOURNÉE CLÔTURÉE -->
+  <section class="screen" id="s-end">
+    <div class="login-wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:70vh">
+      <div style="width:78px;height:78px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 24 24" style="width:40px;height:40px;stroke:#fff;fill:none;stroke-width:3"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <h2 style="color:var(--navy);margin-top:16px">Journée clôturée</h2>
+      <p style="color:var(--sub);font-size:14px;max-width:260px;line-height:1.5">Merci, ta journée est bien enregistrée. Bonne route&nbsp;!</p>
+      <button class="save-btn" style="margin-top:20px;max-width:240px" onclick="backToVehicule()">Nouvelle tournée</button>
     </div>
   </section>
 
@@ -851,6 +860,9 @@ const SOCIETE={
   transport:'Transport en compte propre (linge)'
 };
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw-chauffeur.js').catch(()=>{});}
+window.addEventListener('beforeunload',function(e){
+  try{ if(S&&S.chauffeur&&S.vehicule&&edlDoneToday()&&!finDoneToday()){ e.preventDefault(); e.returnValue=''; } }catch(_){}
+});
 let CHAUFFEURS=[], VEHICULES=[];
 let S={chauffeur:null,vehicule:null,tournees:[],statuts:{},curStop:null,unsub:null};
 
@@ -985,6 +997,25 @@ function pickChauffeur(id){
   attachMessages();
   renderVehicules();
   go('veh');
+  checkUnclosedDays();
+}
+function checkUnclosedDays(){
+  if(!S.chauffeur||typeof db==='undefined'||!db)return;
+  const dates=[1,2,3].map(n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);});
+  Promise.all([
+    db.collection('chauffeurs_edl').where('date','in',dates).get(),
+    db.collection('chauffeurs_checklist_fin').where('date','in',dates).get()
+  ]).then(([edlS,finS])=>{
+    const mine=S.chauffeur.id, fins=new Set();
+    finS.forEach(d=>{const x=d.data();if(x.chauffeur===mine)fins.add(x.date+'_'+x.vehicule);});
+    let target=null;
+    edlS.forEach(d=>{const x=d.data();if(x.chauffeur!==mine||target)return;const k=x.date+'_'+x.vehicule;if(fins.has(k))return;let w=false;try{w=localStorage.getItem('fin_warned_'+k)==='1';}catch(e){}if(!w)target={date:x.date,veh:x.vehicule,k};});
+    if(target){
+      try{localStorage.setItem('fin_warned_'+target.k,'1');}catch(e){}
+      let dfr=target.date;try{dfr=new Date(target.date+'T12:00:00').toLocaleDateString('fr-FR');}catch(e){}
+      uiAlert('Journée non clôturée','Ta journée du '+dfr+' ('+target.veh+') n\'a pas été clôturée. Pense à clôturer en fin de tournée.','Compris');
+    }
+  }).catch(()=>{});
 }
 
 /* ---------- RECONNEXION AUTO (3 s, téléphone attribué) ---------- */
@@ -1075,6 +1106,9 @@ function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
 function chargeKey(){ return 'charge_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
 function chargeDoneToday(){ try{return localStorage.getItem(chargeKey())==='1';}catch(e){return false;} }
 function markChargeDone(){ try{localStorage.setItem(chargeKey(),'1');}catch(e){} }
+function finKey(){ return 'fin_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
+function finDoneToday(){ try{return localStorage.getItem(finKey())==='1';}catch(e){return false;} }
+function markFinDone(){ try{localStorage.setItem(finKey(),'1');}catch(e){} }
 
 /* ---------- JOURNEE ---------- */
 function statutArret(num,ordre){
@@ -2081,10 +2115,10 @@ async function saveEntretien(){
 /* --- Rolls --- */
 
 /* --- Fin de journée --- */
-const FIN_ITEMS=['Tournée terminée','Rolls comptés','Véhicule rangé et propre','Anomalies signalées'];
+const FIN_ITEMS=['Caisse désinfectée','Anomalies signalées'];
 function openFin(){
   document.getElementById('finVeh').textContent=S.vehicule.id;
-  document.getElementById('finKm').value=curKm();document.getElementById('finNote').value='';
+  document.getElementById('finNote').value='';
   document.getElementById('finChk').innerHTML=FIN_ITEMS.map(t=>`
     <div class="chk-row"><span class="lbl">${t}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
@@ -2099,25 +2133,21 @@ async function saveFin(){
   const items={};
   document.querySelectorAll('#finChk .tgl').forEach((t,i)=>{items[FIN_ITEMS[i]]=t.classList.contains('on');});
   const done=Object.keys(items).filter(k=>items[k]).length;
-  const KM=parseInt(document.getElementById('finKm').value,10)||null;
   const note=(document.getElementById('finNote').value||'').trim();
   const ok=await uiConfirm('Clôturer la journée',done+'/'+FIN_ITEMS.length+' points validés sur '+S.vehicule.id+'. Confirmer la clôture ?','Clôturer');
   if(!ok)return;
   try{
-    await db.collection('chauffeurs_checklist_fin').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,items,kmFinal:KM,note,at:Date.now()});
-    setCurKm(KM);
-    await uiAlert('Fin de journée','Pense à désinfecter la caisse avant de partir.','Oui');
+    await db.collection('chauffeurs_checklist_fin').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,items,note,at:Date.now()});
+    markFinDone();
     openDebrief();
   }catch(e){uiToast('Échec clôture','err');}
 }
-let _debriefReturn=false;
 function openDebrief(){
   document.getElementById('debVeh').textContent=S.vehicule.id;
   document.getElementById('debNote').value='';
   go('debrief');
 }
-function anoFromDebrief(){ _debriefReturn=true; openAno(''); }
-function anoBack(){ if(_debriefReturn){_debriefReturn=false;go('debrief');} else go('hub'); }
+function anoBack(){ go('hub'); }
 async function finishDay(){
   const note=(document.getElementById('debNote').value||'').trim();
   if(note){
@@ -2129,7 +2159,7 @@ async function finishDay(){
       uiToast('Remarque envoyée au responsable','ok');
     }catch(e){}
   }
-  backToVehicule();
+  go('end');
 }
 function backToVehicule(){
   try{stopGeo();}catch(e){}
@@ -2207,8 +2237,7 @@ async function saveAno(){
     let urls=[];
     if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos);if(urls.length)await ref.update({photos:urls});}
     uiToast(!photos.length?'Anomalie signalée':(urls.length?'Anomalie + photos envoyées':'Anomalie envoyée (photos non transmises)'),(!photos.length||urls.length)?'ok':'err');
-    if(_debriefReturn){_debriefReturn=false;go('debrief');}
-    else openAno();
+    openAno();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
 }
