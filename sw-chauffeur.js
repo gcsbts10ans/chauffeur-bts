@@ -4,7 +4,7 @@
      (le cache ne sert que de secours hors-ligne)
    - Librairies CDN (Leaflet, Firebase) : cache d'abord (stables, versionnées)
    Incrémenter CACHE en cas de besoin de purge forcée. */
-const CACHE = 'chauffeur-v27';
+const CACHE = 'chauffeur-v28';
 const CDN = ['unpkg.com', 'www.gstatic.com'];
 
 self.addEventListener('install', e => {
@@ -35,8 +35,11 @@ self.addEventListener('fetch', e => {
 
   // App + même origine : réseau d'abord, cache en secours
   if (url.origin === self.location.origin) {
+    // Pour le HTML (navigation), forcer le vrai réseau (bypass cache HTTP du navigateur/CDN)
+    const isDoc = e.request.mode === 'navigate' || e.request.destination === 'document';
+    const req = isDoc ? new Request(e.request.url, { cache: 'reload', credentials: 'same-origin' }) : e.request;
     e.respondWith(
-      fetch(e.request).then(r => {
+      fetch(req).then(r => {
         const copy = r.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
         return r;
