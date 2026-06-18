@@ -934,7 +934,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v26';
+const APP_VERSION='v27';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -1300,6 +1300,7 @@ function finDoneToday(){ try{return localStorage.getItem(finKey())==='1';}catch(
 function markFinDone(){ try{localStorage.setItem(finKey(),'1');}catch(e){} }
 
 /* ---------- JOURNEE ---------- */
+function bySeq(a,b){return (a.seq!=null?a.seq:a.ordre)-(b.seq!=null?b.seq:b.ordre);}
 function statutArret(num,ordre){
   const d=S.statuts[TODAY+'_T'+num];
   return d&&d.arrets&&d.arrets[ordre]?d.arrets[ordre]:null;
@@ -1308,7 +1309,7 @@ function renderJournee(){
   let html='',total=0,done=0,curSet=false,curLabel='—';
   S.tournees.forEach(t=>{
     html+=`<div class="tgroup"><span>Tournée ${t.numero}</span><span class="hr"></span>${(t.arrets||[]).length>1?`<button class="route-btn" onclick="openCarteTour('${t.numero}')"><svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v16M15 6v16"/></svg>Itinéraire</button>`:''}<span>${(t.arrets||[]).length} arrêts</span></div>`;
-    (t.arrets||[]).forEach(a=>{
+    (t.arrets||[]).slice().sort(bySeq).forEach(a=>{
       total++;
       const st=statutArret(t.numero,a.ordre);
       let cls,dot;
@@ -1566,7 +1567,7 @@ function mapsRoute(stops,origin){
 function openUrl(u){window.open(u,'_blank','noopener');}
 function routeTournee(num){
   const t=S.tournees.find(x=>x.numero===num);if(!t)return;
-  const all=(t.arrets||[]).slice().sort((a,b)=>a.ordre-b.ordre);
+  const all=(t.arrets||[]).slice().sort(bySeq);
   const remaining=all.filter(a=>{const s=statutArret(num,a.ordre);return !(s&&s.ok);}).map(a=>a.adresse).filter(Boolean);
   if(!remaining.length){uiToast('Tournée terminée — plus d\'arrêt à guider','ok');return;}
   const started=all.some(a=>{const s=statutArret(num,a.ordre);return s&&s.ok;});
@@ -1660,7 +1661,7 @@ async function cSelTour(num){
   cCur=''+num;cBuildChips();
   const t=S.tournees.find(x=>(''+x.numero)===cCur);if(!t)return;
   if(cLayer)cLayer.remove();cLayer=L.layerGroup().addTo(cMap);
-  const arrets=(t.arrets||[]).slice().sort((a,b)=>a.ordre-b.ordre);
+  const arrets=(t.arrets||[]).slice().sort(bySeq);
   const pts=[];let done=0,geoless=0;
   if(cDepot){L.marker(cDepot,{icon:cDepotIcon()}).addTo(cLayer).bindPopup('<div class="lp"><b>Dépôt BTS</b><div class="a">Départ &amp; retour</div></div>');pts.push(cDepot);}
   arrets.forEach(a=>{
@@ -1778,7 +1779,7 @@ function cToggleVoice(){cVoiceOn=!cVoiceOn;document.getElementById('cVb').classL
 function cSpeak(t){try{const u=new SpeechSynthesisUtterance(t);u.lang='fr-FR';speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
 function cEmergencyMaps(){
   const t=S.tournees.find(x=>(''+x.numero)===cCur);let addr=BTS_DEPOT;
-  if(t){const next=(t.arrets||[]).slice().sort((a,b)=>a.ordre-b.ordre).find(a=>{const st=statutArret(t.numero,a.ordre);return !(st&&st.ok)&&a.adresse;});if(next)addr=next.adresse;}
+  if(t){const next=(t.arrets||[]).slice().sort(bySeq).find(a=>{const st=statutArret(t.numero,a.ordre);return !(st&&st.ok)&&a.adresse;});if(next)addr=next.adresse;}
   openUrl(mapsTo(addr));
   document.getElementById('cOff').classList.remove('on');
 }
