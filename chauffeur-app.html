@@ -1616,7 +1616,8 @@ function renderCharge(){
       </div>
       <div class="chg-poids">Poids estimé<br><b>${poids} kg</b></div>
       <div class="chg-note">Estimation : 1 roll ≈ ${ROLL_KG} kg. Ce n'est pas un pesage certifié — le poids légal réel se mesure au pont-bascule.</div>
-      ${_chargeMandatory?'<button class="save-btn" style="margin-top:14px" onclick="confirmCharge()">Démarrer la tournée</button>':''}
+      ${_chargeMandatory?'<div class="chg-note" style="margin-top:12px">Pendant la tournée, votre position est transmise au responsable. Suivi limité au temps de travail, seule la dernière position est conservée, et elle est effacée à la clôture.</div>':''}
+      ${_chargeMandatory?'<button class="save-btn" style="margin-top:12px" onclick="confirmCharge()">Démarrer la tournée</button>':''}
     </div>`;
 }
 async function confirmCharge(){
@@ -2139,6 +2140,8 @@ async function saveFin(){
   try{
     await db.collection('chauffeurs_checklist_fin').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,items,note,at:Date.now()});
     markFinDone();
+    try{stopGeo();}catch(e){}
+    try{await db.collection('chauffeurs_positions').doc(S.chauffeur.id).delete();}catch(e){}
     openDebrief();
   }catch(e){uiToast('Échec clôture','err');}
 }
