@@ -525,11 +525,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .wx-chip{display:none;align-items:center;gap:5px;margin-left:auto;font-size:12.5px;font-weight:700;color:var(--navy);flex-shrink:0;white-space:nowrap}
 .wx-chip.show{display:flex}
 .wx-chip svg{flex-shrink:0}
-.traf-dot{display:none;width:13px;height:13px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(0,0,0,.04)}
-.traf-dot.show{display:block}
-.traf-dot.green{background:var(--green)}
-.traf-dot.orange{background:#f59e0b}
-.traf-dot.red{background:var(--red)}
 </style>
 </head>
 <body>
@@ -684,7 +679,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="avatar" id="hubAva">?</div>
       <div><h1 id="hubName">—</h1><p id="hubVeh">—</p></div>
       <div class="wx-chip" id="wxChip" onclick="loadWeather(true)"></div>
-      <div class="traf-dot" id="trafDot" onclick="trafInfo()"></div>
       <div class="icobtn" onclick="askChangeVehicule()"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>
     </div>
     <div class="geo-line wait" id="geoLine" onclick="openPerms()"><span class="geo-dot"></span>Localisation…</div>
@@ -934,7 +928,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v28';
+const APP_VERSION='v29';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -1256,11 +1250,7 @@ async function pickVehicule(id){
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
 }
-let _trafTimer=null;
-function enterHub(){ go('hub'); startGeo(); loadWeather(); updateTraffic(); if(!_trafTimer)_trafTimer=setInterval(updateTraffic,300000); }
-function trafficColor(){const h=new Date().getHours();if(h>=7&&h<8)return 'orange';if(h>=8&&h<9)return 'red';return 'green';}
-function updateTraffic(){const el=document.getElementById('trafDot');if(!el)return;el.className='traf-dot show '+trafficColor();}
-function trafInfo(){const c=trafficColor();uiToast(c==='red'?'Trafic chargé (heure de pointe)':c==='orange'?'Trafic dense':'Trafic fluide',c==='green'?'ok':'');}
+function enterHub(){ go('hub'); startGeo(); loadWeather(); }
 /* ===== Météo + vent (Open-Meteo, gratuit, cache 30 min) ===== */
 let _wxAt=0;
 function wxLatLng(){
@@ -2118,7 +2108,7 @@ function showMsgPill(n){
 }
 function hideMsgPill(){clearTimeout(_pillT);const el=document.getElementById('msgPill');if(el)el.classList.remove('on');}
 function openMsgPill(){hideMsgPill();openMessages();}
-function goLogin(){detachMessages();detachAlertes();if(_trafTimer){clearInterval(_trafTimer);_trafTimer=null;}hideMsgPill();go('login');}
+function goLogin(){detachMessages();detachAlertes();hideMsgPill();go('login');}
 /* ---------- Son de cloche (Web Audio, sans fichier) ---------- */
 let _actx=null;
 function _ensureAudio(){
