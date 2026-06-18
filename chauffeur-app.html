@@ -522,7 +522,9 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .perm-btn{background:var(--navy);color:#fff;border:none;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:700;flex-shrink:0}
 .perm-btn:active{transform:scale(.95)}
 .perm-note{font-size:12px;color:var(--sub);text-align:center;margin:14px 8px 0;line-height:1.5}
-.wx-chip{display:none;align-items:center;gap:5px;margin-left:auto;font-size:12.5px;font-weight:700;color:var(--navy);flex-shrink:0;white-space:nowrap}
+.hub-id{flex:1;min-width:0;overflow:hidden}
+.hub-id h1,.hub-id p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-chip{display:none;align-items:center;gap:5px;margin-left:8px;font-size:12.5px;font-weight:700;color:var(--navy);flex-shrink:0;white-space:nowrap}
 .wx-chip.show{display:flex}
 .wx-chip svg{flex-shrink:0}
 </style>
@@ -677,7 +679,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
   <section class="screen" id="s-hub">
     <div class="glass top">
       <div class="avatar" id="hubAva">?</div>
-      <div><h1 id="hubName">—</h1><p id="hubVeh">—</p></div>
+      <div class="hub-id"><h1 id="hubName">—</h1><p id="hubVeh">—</p></div>
       <div class="wx-chip" id="wxChip" onclick="loadWeather(true)"></div>
       <div class="icobtn" onclick="askChangeVehicule()"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>
     </div>
@@ -928,7 +930,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v29';
+const APP_VERSION='v31';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -2361,7 +2363,7 @@ async function renderEntretien(){
   const open=document.getElementById('entOpen'),hist=document.getElementById('entHist');
   open.innerHTML='<div class="msg-empty">Chargement…</div>';hist.innerHTML='';
   try{
-    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(50).get();
+    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).get();
     let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
     rows.sort((a,b)=>(b.at||0)-(a.at||0));
     const ouverts=rows.filter(r=>r.statut==='ouvert');
