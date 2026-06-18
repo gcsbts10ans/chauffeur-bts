@@ -1,0 +1,18 @@
+# Réautorise géolocalisation + caméra + plein écran pour ce site
+# (écrase la Permissions-Policy restrictive définie globalement sur le serveur)
+<IfModule mod_headers.c>
+  Header always unset Permissions-Policy
+  Header always unset Feature-Policy
+  Header always set Permissions-Policy "geolocation=(self), camera=(self), fullscreen=(self)"
+  Header always set Feature-Policy "geolocation 'self'; camera 'self'; fullscreen 'self'"
+  Header always set X-BTS-Test "htaccess-actif"
+</IfModule>
+
+# App chauffeur — pas de cache (mises à jour immédiates, fini les réinstallations)
+<IfModule mod_headers.c>
+  <FilesMatch "(chauffeur-app\.html|sw-chauffeur\.js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>

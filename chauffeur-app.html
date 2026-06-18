@@ -766,8 +766,6 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="fld" style="margin-top:8px"><label>Remarque (optionnel)</label><textarea id="finNote" placeholder="Quelque chose à signaler…"></textarea></div>
       <button class="save-btn" onclick="saveFin()">Clôturer ma journée</button>
     </div>
-    <div class="sec-title">Dernières clôtures</div>
-    <div id="finHist"></div>
   </section>
 
   <!-- ANOMALIES -->
@@ -926,7 +924,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v32';
+const APP_VERSION='v34';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -942,7 +940,16 @@ const SOCIETE={
   adresse:'ZI du Chapitre, 20 av. Larrieu Thibaud, 31100 Toulouse',
   transport:'Transport en compte propre (linge)'
 };
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw-chauffeur.js').catch(()=>{});}
+if('serviceWorker' in navigator){
+  var _swReloaded=false;
+  if(navigator.serviceWorker.controller){
+    navigator.serviceWorker.addEventListener('controllerchange',function(){ if(_swReloaded)return; _swReloaded=true; location.reload(); });
+  }
+  navigator.serviceWorker.register('sw-chauffeur.js',{updateViaCache:'none'}).then(function(reg){
+    try{reg.update();}catch(e){}
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{reg.update();}catch(e){} } });
+  }).catch(function(){});
+}
 window.addEventListener('beforeunload',function(e){
   try{ if(S&&S.chauffeur&&S.vehicule&&edlDoneToday()&&!finDoneToday()){ e.preventDefault(); e.returnValue=''; } }catch(_){}
 });
@@ -2371,12 +2378,6 @@ function openFin(){
   document.getElementById('finChk').innerHTML=FIN_ITEMS.map(t=>`
     <div class="chk-row"><span class="lbl">${t}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
-  loadHist('chauffeurs_checklist_fin','finHist',r=>{
-    const done=r.items?Object.keys(r.items).filter(k=>r.items[k]).length:0;
-    const tot=r.items?Object.keys(r.items).length:0;
-    return `<div class="glass hist-row"><div class="h1"><b>${r.chauffeurNom||r.chauffeur||''}</b><span class="dt">${frDate(r)}</span></div>
-      <div class="meta">${done}/${tot} validés${r.kmFinal?' · '+r.kmFinal+' km':''}${r.note?' · '+(r.note||'').replace(/</g,'&lt;'):''}</div></div>`;
-  });
 }
 async function saveFin(){
   const items={};
