@@ -934,7 +934,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v25';
+const APP_VERSION='v26';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -2370,7 +2370,7 @@ async function renderEntretien(){
   const open=document.getElementById('entOpen'),hist=document.getElementById('entHist');
   open.innerHTML='<div class="msg-empty">Chargement…</div>';hist.innerHTML='';
   try{
-    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).get();
+    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(50).get();
     let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
     rows.sort((a,b)=>(b.at||0)-(a.at||0));
     const ouverts=rows.filter(r=>r.statut==='ouvert');
