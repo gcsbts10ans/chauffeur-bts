@@ -934,7 +934,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v24';
+const APP_VERSION='v25';
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -2117,7 +2117,7 @@ function showMsgPill(n){
 }
 function hideMsgPill(){clearTimeout(_pillT);const el=document.getElementById('msgPill');if(el)el.classList.remove('on');}
 function openMsgPill(){hideMsgPill();openMessages();}
-function goLogin(){detachMessages();detachAlertes();hideMsgPill();go('login');}
+function goLogin(){detachMessages();detachAlertes();if(_trafTimer){clearInterval(_trafTimer);_trafTimer=null;}hideMsgPill();go('login');}
 /* ---------- Son de cloche (Web Audio, sans fichier) ---------- */
 let _actx=null;
 function _ensureAudio(){
