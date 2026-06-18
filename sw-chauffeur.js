@@ -4,11 +4,10 @@
      (le cache ne sert que de secours hors-ligne)
    - Librairies CDN (Leaflet, Firebase) : cache d'abord (stables, versionnées)
    Incrémenter CACHE en cas de besoin de purge forcée. */
-const CACHE = 'chauffeur-v9';
+const CACHE = 'chauffeur-v24';
 const CDN = ['unpkg.com', 'www.gstatic.com'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.add('arrete-circulation-16-04-2021.pdf')).catch(() => {}));
   self.skipWaiting();
 });
 

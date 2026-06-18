@@ -19,7 +19,7 @@
   --green:#16a34a; --red:#DC2626; --amber:#f59e0b;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;font-family:'DM Sans',sans-serif}
-body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify-content:center;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify-content:center;overflow-x:hidden;overscroll-behavior-y:contain}
 .blob{position:fixed;border-radius:50%;filter:blur(60px);opacity:.5;will-change:transform;z-index:0;pointer-events:none;animation:drift 22s ease-in-out infinite}
 .b1{width:300px;height:300px;background:#8ea9d8;top:-70px;left:-70px}
 .b2{width:260px;height:260px;background:#9fb1cf;bottom:40px;right:-80px;animation-delay:-6s}
@@ -27,6 +27,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .b4{width:200px;height:200px;background:#9bbdd9;top:32%;right:-60px;animation-delay:-16s}
 @keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(14px,-18px) scale(1.05)}66%{transform:translate(-12px,12px) scale(.97)}}
 .phone{position:relative;z-index:1;width:100%;max-width:430px;min-height:100vh;padding:18px 16px 28px}
+#appVer{position:fixed;bottom:3px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.5px;color:var(--sub);opacity:.5;pointer-events:none;z-index:6;font-family:'DM Sans',sans-serif}
 
 .glass{background:linear-gradient(140deg,rgba(255,255,255,.70),rgba(255,255,255,.45));
   backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);
@@ -44,6 +45,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .icobtn{margin-left:auto;width:40px;height:40px;border-radius:13px;background:var(--glass-strong);
   border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .icobtn svg{width:20px;height:20px;stroke:rgba(30,60,114,.55);fill:none;stroke-width:2}
+.icobtn.back{background:var(--navy);border-color:transparent;box-shadow:0 3px 8px rgba(30,60,114,.3)}
+.icobtn.back svg{stroke:#fff;stroke-width:2.4}
 
 .screen{display:none;animation:fade .25s ease}
 .screen.on{display:block}
@@ -196,6 +199,9 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
 .tile{padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;transition:transform .12s;position:relative}
 .tile:active{transform:scale(.93)}
+.tile.soon{opacity:.55;pointer-events:none}
+.tile.soon b{color:var(--sub)}
+.soon-tag{font-size:9.5px;font-weight:700;color:var(--sub);background:var(--glass-strong);border:1px solid var(--line);border-radius:8px;padding:2px 7px;margin-top:3px;text-transform:uppercase;letter-spacing:.3px}
 .tile-ic{width:46px;height:46px;border-radius:15px;background:var(--glass-strong);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .tile-ic svg{width:24px;height:24px;stroke:rgba(30,60,114,.55);fill:none;stroke-width:1.8}
 .tile span{font-size:12px;font-weight:700;color:var(--ink);line-height:1.2}
@@ -489,16 +495,78 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .imp-tx{font-size:16px;font-weight:600;color:var(--ink);line-height:1.45;margin-bottom:12px;white-space:pre-wrap}
 .imp-from{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:18px}
 .imp-ok{width:100%;background:linear-gradient(135deg,#e5484d,var(--red));color:#fff;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(220,38,38,.32)}
+.boot-wrap{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 28px}
+.boot-ava{min-width:62px;height:62px;font-size:22px;border-radius:18px;margin-bottom:18px}
+.boot-hi{font-size:26px;font-weight:800;color:var(--navy);margin:0}
+.boot-sub{font-size:14px;color:var(--sub);font-weight:500;margin:6px 0 0}
+.boot-track{width:210px;height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:22px auto 24px}
+.boot-bar{height:100%;width:0;background:linear-gradient(90deg,var(--navy),var(--navy2));border-radius:3px}
+.boot-checks{width:210px;display:flex;flex-direction:column;gap:10px}
+.boot-line{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:var(--sub)}
+.boot-line .bl-dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex-shrink:0}
+.boot-line.ok .bl-dot{background:var(--green)}
+.boot-line.ko .bl-dot{background:var(--red)}
+.boot-line .bl-st{margin-left:auto;font-weight:700}
+.boot-line.ok .bl-st{color:var(--green)}
+.boot-line.ko .bl-st{color:var(--red)}
+.perm-row{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid var(--line)}
+.perm-row:last-child{border-bottom:none}
+.perm-dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex-shrink:0}
+.perm-row.ok .perm-dot{background:var(--green)}
+.perm-row.ko .perm-dot{background:var(--red)}
+.perm-tx{display:flex;flex-direction:column;flex:1;min-width:0}
+.perm-tx b{font-size:15px;color:var(--navy)}
+.perm-tx span{font-size:12.5px;color:var(--sub);font-weight:500}
+.perm-row.ok .perm-tx span{color:var(--green)}
+.perm-row.ko .perm-tx span{color:var(--red)}
+.perm-btn{background:var(--navy);color:#fff;border:none;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:700;flex-shrink:0}
+.perm-btn:active{transform:scale(.95)}
+.perm-note{font-size:12px;color:var(--sub);text-align:center;margin:14px 8px 0;line-height:1.5}
+.wx-chip{display:none;align-items:center;gap:5px;margin-left:auto;font-size:12.5px;font-weight:700;color:var(--navy);flex-shrink:0;white-space:nowrap}
+.wx-chip.show{display:flex}
+.wx-chip svg{flex-shrink:0}
+.traf-dot{display:none;width:13px;height:13px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(0,0,0,.04)}
+.traf-dot.show{display:block}
+.traf-dot.green{background:var(--green)}
+.traf-dot.orange{background:#f59e0b}
+.traf-dot.red{background:var(--red)}
 </style>
 </head>
 <body>
 <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div>
 
 <div class="phone">
+<div id="appVer"></div>
 
   <!-- LOADING -->
   <section class="screen on" id="s-load">
     <div class="loading"><div class="spin"></div><div id="loadTxt">Connexion…</div></div>
+  </section>
+
+  <!-- DEMARRAGE JOURNEE -->
+  <section class="screen" id="s-boot">
+    <div class="boot-wrap">
+      <div class="avatar boot-ava" id="bootAva">?</div>
+      <h1 class="boot-hi" id="bootHi">Salut</h1>
+      <p class="boot-sub">Je suis prêt dans 5 secondes…</p>
+      <div class="boot-track"><div class="boot-bar" id="bootBar"></div></div>
+      <div class="boot-checks">
+        <div class="boot-line" id="bootNet"><span class="bl-dot"></span><span class="bl-tx">Réseau</span><span class="bl-st" id="bootNetSt">…</span></div>
+        <div class="boot-line" id="bootGps"><span class="bl-dot"></span><span class="bl-tx">GPS</span><span class="bl-st" id="bootGpsSt">…</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AUTORISATIONS -->
+  <section class="screen" id="s-perms">
+    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="sec-title">Autorisations du téléphone</div>
+    <div class="glass form-card">
+      <div class="perm-row" id="permGps"><span class="perm-dot"></span><div class="perm-tx"><b>Localisation (GPS)</b><span id="permGpsSt">…</span></div><button class="perm-btn" onclick="rearmGps()">Réactiver</button></div>
+      <div class="perm-row" id="permSon"><span class="perm-dot"></span><div class="perm-tx"><b>Son</b><span id="permSonSt">…</span></div><button class="perm-btn" onclick="testSon()">Activer</button></div>
+      <div class="perm-row" id="permCam"><span class="perm-dot"></span><div class="perm-tx"><b>Appareil photo</b><span id="permCamSt">…</span></div><button class="perm-btn" onclick="testCam()">Tester</button></div>
+    </div>
+    <p class="perm-note">Si une autorisation reste bloquée, ouvre les réglages du téléphone pour cette application et autorise-la.</p>
   </section>
 
   <!-- LOGIN -->
@@ -544,7 +612,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="glass top">
       <div class="avatar" id="jourAva">?</div>
       <div><h1 id="jourVeh">—</h1><p id="jourSub">Ma journée</p></div>
-      <div class="icobtn" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+      <div class="icobtn back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
     </div>
     <div class="glass prog">
       <div class="prog-head"><b>Progression</b><span id="progCount">0 / 0</span></div>
@@ -598,14 +666,28 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div id="tachesBody"></div>
   </section>
 
+  <!-- ARRÊTÉ CIRCULATION -->
+  <section class="screen" id="s-arrete">
+    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="sec-title">Arrêté circulation</div>
+    <div class="glass form-card">
+      <div class="sub-lbl">En cas de contrôle</div>
+      <p style="font-size:13.5px;line-height:1.55;color:var(--ink);margin:6px 0 0">Tu as le droit de circuler les dimanches et jours fériés : tu transportes du linge et des marchandises nécessaires aux établissements de santé. Si tu es contrôlé, présente cette page.</p>
+    </div>
+    <div class="sec-title" style="margin-top:14px">Texte officiel</div>
+    <div class="ctrl-deroge">« Les véhicules transportant des déchets hospitaliers, du linge et des marchandises nécessaires au fonctionnement des établissements de santé publics ou privés et des établissements d'hébergement pour personnes âgées dépendantes ou de marchandises à caractère médical ou de protection sanitaire » ne sont pas concernés par l'interdiction de circuler les week-ends et jours fériés, conformément à l'article 4-I-9 de l'arrêté du 16 avril 2021.</div>
+  </section>
+
   <!-- HUB -->
   <section class="screen" id="s-hub">
     <div class="glass top">
       <div class="avatar" id="hubAva">?</div>
       <div><h1 id="hubName">—</h1><p id="hubVeh">—</p></div>
-      <div class="icobtn" onclick="go('veh')"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>
+      <div class="wx-chip" id="wxChip" onclick="loadWeather(true)"></div>
+      <div class="traf-dot" id="trafDot" onclick="trafInfo()"></div>
+      <div class="icobtn" onclick="askChangeVehicule()"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>
     </div>
-    <div class="geo-line wait" id="geoLine"><span class="geo-dot"></span>Localisation…</div>
+    <div class="geo-line wait" id="geoLine" onclick="openPerms()"><span class="geo-dot"></span>Localisation…</div>
     <div id="hubBanner"></div>
     <div class="glass hero" id="hubHero" onclick="go('jour')"></div>
     <div class="grid" id="hubGrid"></div>
@@ -634,6 +716,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="fld"><label>Détail (optionnel)</label><textarea id="alText" placeholder="Décris la situation…"></textarea></div>
       <button class="al-send" onclick="sendAlerte()">Envoyer l'alerte</button>
     </div>
+    <div class="sec-title">Dernières alertes</div>
+    <div id="alHist"></div>
   </section>
 
   <!-- CARBURANT -->
@@ -667,13 +751,16 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Entretien — <span id="entVeh"></span></div>
     <div class="glass form-card">
+      <div class="sub-lbl">Nouveau ticket</div>
       <div class="fld"><label>Type</label>
         <div class="sel-wrap"><select id="entType"></select></div>
       </div>
       <div class="fld"><label>Km (optionnel)</label><input id="entKm" type="number" inputmode="numeric" placeholder="0"></div>
       <div class="fld"><label>Note (optionnel)</label><textarea id="entNote" placeholder="Détail de l'intervention…"></textarea></div>
-      <button class="save-btn" onclick="saveEntretien()">Enregistrer</button>
+      <button class="save-btn" onclick="saveEntretien()">Ouvrir le ticket</button>
     </div>
+    <div class="sec-title">Tickets ouverts</div>
+    <div id="entOpen"></div>
     <div class="sec-title">Historique</div>
     <div id="entHist"></div>
   </section>
@@ -719,7 +806,9 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
         <button type="button" class="photo-btn" onclick="document.getElementById('rapFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
         <div class="thumbs" id="rapThumbs"></div>
       </div>
-      <button class="save-btn" onclick="saveRap()">Envoyer le rapport</button>
+      <div class="sub-lbl">Signature</div>
+      <div class="sig-wrap"><canvas id="rapSig"></canvas><button type="button" class="sig-clear" onclick="clearSig()">Effacer</button></div>
+      <button class="save-btn" style="margin-top:16px" onclick="saveRap()">Envoyer le rapport</button>
     </div>
   </section>
 
@@ -845,6 +934,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
+const APP_VERSION='v24';
+try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
@@ -863,6 +954,41 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw-chauffeur.
 window.addEventListener('beforeunload',function(e){
   try{ if(S&&S.chauffeur&&S.vehicule&&edlDoneToday()&&!finDoneToday()){ e.preventDefault(); e.returnValue=''; } }catch(_){}
 });
+
+/* Pull-to-refresh : tirer vers le bas en haut de page recharge l'app (récupère la dernière version) */
+(function(){
+  var sy=0, active=false, cur=0, bar=null;
+  function getBar(){
+    if(!bar){
+      bar=document.createElement('div');
+      bar.style.cssText='position:fixed;top:0;left:0;right:0;height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:7px;background:linear-gradient(180deg,rgba(30,95,173,0),rgba(30,95,173,.10));color:#1E5FAD;font:600 12px/1.2 "DM Sans",system-ui,sans-serif;z-index:99998;pointer-events:none;transition:height .12s ease';
+      bar.textContent='Tirez pour actualiser';
+      document.body.appendChild(bar);
+    }
+    return bar;
+  }
+  function topOk(){ var se=document.scrollingElement||document.documentElement; return (se.scrollTop||window.scrollY||0)<=0; }
+  function blocked(){ try{ if(isOn('carte'))return true; }catch(e){} return false; }
+  document.addEventListener('touchstart',function(e){
+    if(e.touches.length!==1){active=false;return;}
+    if(topOk()&&!blocked()){ sy=e.touches[0].clientY; active=true; cur=0; } else active=false;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!active)return;
+    var dy=e.touches[0].clientY-sy;
+    if(dy>0){ cur=Math.min(dy*0.45,72); var b=getBar(); b.style.height=cur+'px'; b.textContent=cur>=56?'Relâchez pour actualiser':'Tirez pour actualiser'; }
+    else { cur=0; if(bar)bar.style.height='0px'; }
+  },{passive:true});
+  document.addEventListener('touchend',function(){
+    if(!active)return; active=false;
+    var b=getBar();
+    if(cur>=56){
+      b.textContent='Actualisation…'; b.style.height='40px';
+      try{ if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration){ navigator.serviceWorker.getRegistration().then(function(r){ if(r)r.update(); }); } }catch(e){}
+      setTimeout(function(){ location.reload(); },200);
+    } else { b.style.height='0px'; }
+  },{passive:true});
+})();
 let CHAUFFEURS=[], VEHICULES=[];
 let S={chauffeur:null,vehicule:null,tournees:[],statuts:{},curStop:null,unsub:null};
 
@@ -877,6 +1003,7 @@ function go(id){
   }
   _slideNext=false;
   window.scrollTo(0,0);
+  if(id==='hub'&&S.chauffeur&&S.vehicule)renderHub();
 }
 function ini(nom,prenom){return ((prenom||'')[0]||'')+((nom||'')[0]||'');}
 
@@ -995,9 +1122,39 @@ function pickChauffeur(id){
   document.getElementById('vehAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('vehHi').textContent='Bonjour '+(S.chauffeur.prenom||'');
   attachMessages();
+  attachAlertes();
   renderVehicules();
-  go('veh');
-  checkUnclosedDays();
+  if(!welcomeDoneToday()){ markWelcomeDone(); showBoot(()=>{go('veh');checkUnclosedDays();}); }
+  else { go('veh'); checkUnclosedDays(); }
+}
+function welcomeKey(){return 'welcome_'+TODAY+'_'+(S.chauffeur?S.chauffeur.id:'');}
+function welcomeDoneToday(){try{return localStorage.getItem(welcomeKey())==='1';}catch(e){return false;}}
+function markWelcomeDone(){try{localStorage.setItem(welcomeKey(),'1');}catch(e){}}
+function setBootCheck(id,ok,txt){
+  const el=document.getElementById('boot'+id);if(!el)return;
+  el.classList.remove('ok','ko');if(ok===true)el.classList.add('ok');else if(ok===false)el.classList.add('ko');
+  const st=document.getElementById('boot'+id+'St');if(st)st.textContent=txt;
+}
+function showBoot(done){
+  const p=(S.chauffeur&&S.chauffeur.prenom)||'';
+  document.getElementById('bootAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
+  document.getElementById('bootHi').textContent='Salut '+p;
+  setBootCheck('Net',null,'…');setBootCheck('Gps',null,'…');
+  const bar=document.getElementById('bootBar');bar.style.transition='none';bar.style.width='0%';
+  go('boot');
+  // vérifs en arrière-plan — gratuites, aucune lecture Firebase
+  setBootCheck('Net',navigator.onLine,navigator.onLine?'OK':'Hors ligne');
+  window.addEventListener('online',()=>setBootCheck('Net',true,'OK'),{once:true});
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      ()=>setBootCheck('Gps',true,'OK'),
+      ()=>setBootCheck('Gps',false,'Indisponible'),
+      {timeout:4500,maximumAge:60000}
+    );
+  } else setBootCheck('Gps',false,'Indisponible');
+  // compte à rebours visuel 5 s
+  requestAnimationFrame(()=>{bar.style.transition='width 5s linear';bar.style.width='100%';});
+  setTimeout(()=>{ if(typeof done==='function')done(); },5000);
 }
 function checkUnclosedDays(){
   if(!S.chauffeur||typeof db==='undefined'||!db)return;
@@ -1099,7 +1256,39 @@ async function pickVehicule(id){
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
 }
-function enterHub(){ go('hub'); startGeo(); }
+let _trafTimer=null;
+function enterHub(){ go('hub'); startGeo(); loadWeather(); updateTraffic(); if(!_trafTimer)_trafTimer=setInterval(updateTraffic,300000); }
+function trafficColor(){const h=new Date().getHours();if(h>=7&&h<8)return 'orange';if(h>=8&&h<9)return 'red';return 'green';}
+function updateTraffic(){const el=document.getElementById('trafDot');if(!el)return;el.className='traf-dot show '+trafficColor();}
+function trafInfo(){const c=trafficColor();uiToast(c==='red'?'Trafic chargé (heure de pointe)':c==='orange'?'Trafic dense':'Trafic fluide',c==='green'?'ok':'');}
+/* ===== Météo + vent (Open-Meteo, gratuit, cache 30 min) ===== */
+let _wxAt=0;
+function wxLatLng(){
+  if(_geoLast&&_geoLast.lat!=null)return [_geoLast.lat,_geoLast.lng];
+  if(_depotLL)return _depotLL;
+  return [43.6045,1.4440];
+}
+function wxIcon(c){
+  const s='width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  if(c===0||c===1)return '<svg '+s+'><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></svg>';
+  if((c>=51&&c<=67)||(c>=80&&c<=82))return '<svg '+s+'><path d="M16 13a4 4 0 0 0 0-8 6 6 0 0 0-11 2 4 4 0 0 0 1 8h9"/><path d="M8 19v2M12 19v2M16 19v2"/></svg>';
+  if((c>=71&&c<=77)||c===85||c===86)return '<svg '+s+'><path d="M16 13a4 4 0 0 0 0-8 6 6 0 0 0-11 2 4 4 0 0 0 1 8h9"/><path d="M8 19v.5M12 20v.5M16 19v.5"/></svg>';
+  if(c>=95)return '<svg '+s+'><path d="M16 13a4 4 0 0 0 0-8 6 6 0 0 0-11 2 4 4 0 0 0 1 8h2"/><path d="M13 11l-3 5h4l-3 5"/></svg>';
+  return '<svg '+s+'><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>';
+}
+async function loadWeather(force){
+  if(!force && Date.now()-_wxAt<30*60000)return;
+  const ll=wxLatLng();
+  try{
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+ll[0]+'&longitude='+ll[1]+'&current_weather=true');
+    if(!r.ok)return;
+    const j=await r.json();const cw=j.current_weather;if(!cw)return;
+    _wxAt=Date.now();
+    const el=document.getElementById('wxChip');if(!el)return;
+    el.innerHTML=wxIcon(cw.weathercode)+'<span>'+Math.round(cw.temperature)+'\u00b0 \u00b7 '+Math.round(cw.windspeed)+' km/h</span>';
+    el.classList.add('show');
+  }catch(e){}
+}
 function edlKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
 function edlDoneToday(){ try{return localStorage.getItem(edlKey())==='1';}catch(e){return false;} }
 function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
@@ -1256,9 +1445,57 @@ function startGeo(){
   _geoWatch=navigator.geolocation.watchPosition(onGeo,onGeoErr,{enableHighAccuracy:true,maximumAge:30000,timeout:25000});
 }
 function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWatch);_geoWatch=null;}}
+/* ===== Autorisations / réarmement (GPS, son, caméra) ===== */
+function openPerms(){go('perms');refreshPerms();}
+function setPerm(id,state,txt){
+  const row=document.getElementById('perm'+id);if(!row)return;
+  row.classList.remove('ok','ko');if(state==='ok')row.classList.add('ok');else if(state==='ko')row.classList.add('ko');
+  const st=document.getElementById('perm'+id+'St');if(st)st.textContent=txt;
+}
+function refreshPerms(){
+  setPerm('Gps',_geoWatch!==null?'ok':null,_geoWatch!==null?'Suivi actif':'Inactif — touche Réactiver');
+  const sonOn=_actx&&_actx.state==='running';
+  setPerm('Son',sonOn?'ok':null,sonOn?'Activé':'À activer');
+  setPerm('Cam',null,'Touche Tester');
+  if(navigator.permissions&&navigator.permissions.query){
+    try{navigator.permissions.query({name:'geolocation'}).then(p=>{if(p.state==='denied')setPerm('Gps','ko','Bloquée — voir réglages du tél');}).catch(()=>{});}catch(e){}
+    try{navigator.permissions.query({name:'camera'}).then(p=>{setPerm('Cam',p.state==='granted'?'ok':(p.state==='denied'?'ko':null),p.state==='granted'?'Autorisé':(p.state==='denied'?'Bloqué — voir réglages du tél':'Touche Tester'));}).catch(()=>{});}catch(e){}
+  }
+}
+function rearmGps(){
+  setPerm('Gps',null,'Réactivation…');
+  stopGeo();startGeo();
+  navigator.geolocation.getCurrentPosition(
+    ()=>setPerm('Gps','ok','Suivi actif'),
+    ()=>setPerm('Gps','ko','Refusée — voir réglages du tél'),
+    {timeout:8000,enableHighAccuracy:true}
+  );
+}
+function testSon(){
+  _ensureAudio();
+  try{
+    if(!_actx){setPerm('Son','ko','Indisponible');return;}
+    const o=_actx.createOscillator(),g=_actx.createGain();
+    o.connect(g);g.connect(_actx.destination);
+    o.frequency.value=880;g.gain.value=0.0001;
+    g.gain.exponentialRampToValueAtTime(0.2,_actx.currentTime+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001,_actx.currentTime+0.32);
+    o.start();o.stop(_actx.currentTime+0.34);
+    setPerm('Son',_actx.state==='running'?'ok':'ko',_actx.state==='running'?'Activé':'Bloqué — touche encore');
+  }catch(e){setPerm('Son','ko','Indisponible');}
+}
+async function testCam(){
+  setPerm('Cam',null,'Test en cours…');
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    s.getTracks().forEach(t=>t.stop());
+    setPerm('Cam','ok','Autorisé');
+  }catch(e){setPerm('Cam','ko','Bloqué — voir réglages du tél');}
+}
 function onGeo(pos){
   const lat=pos.coords.latitude, lng=pos.coords.longitude, acc=pos.coords.accuracy;
   setGeoLine('on','Position partagée');
+  loadWeather();
   checkDepotReturn(lat,lng);
   const now=Date.now();
   const moved=(_geoLast.lat!=null)?geoDist(_geoLast.lat,_geoLast.lng,lat,lng):1e9;
@@ -1697,13 +1934,13 @@ const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
  {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','controle','arrete','taches']},
  {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes']},
- {type:'folder',fid:'sig',label:'Signaler',items:['rapport','edl']},
+ {type:'direct',id:'rapport',label:'Rapport circonstancié'},
  {type:'direct',id:'fin',label:'Fin de journée'},
  {type:'direct',id:'planning',label:'Mon planning'}
 ];
 function modOf(id){return MODULES.find(m=>m.id===id);}
 function appHtml(m,cls){return `<div class="app ${m.col} ${cls||''}"><svg viewBox="0 0 24 24">${m.ic}</svg></div>`;}
-function folderBadge(fid,unread,pend){if(fid==='msg')return unread;if(fid==='veh'){if(new Date().getDay()===4&&pend)return '!';return pend;}return 0;}
+function folderBadge(fid,unread,pend){if(fid==='msg')return unread+alertesNew();if(fid==='veh'){if(new Date().getDay()===4&&pend)return '!';return pend;}return 0;}
 
 function renderHub(){
   document.getElementById('hubAva').textContent=(S.chauffeur.prenom||ini(S.chauffeur.nom,S.chauffeur.prenom));
@@ -1728,6 +1965,7 @@ function renderHub(){
   document.getElementById('hubGrid').innerHTML=HUB.map(h=>{
     if(h.type==='direct'){
       const m=modOf(h.id);
+      if(h.id==='planning')return `<div class="glass tile soon">${appHtml(m,'solo')}<b>${h.label}</b><span class="soon-tag">Bientôt disponible</span></div>`;
       return `<div class="glass tile" onclick="tapDirect(this,'${h.id}')">${appHtml(m,'solo')}<b>${h.label}</b></div>`;
     }
     const badge=folderBadge(h.fid,unread,pend);
@@ -1746,7 +1984,7 @@ function openFolderHub(tile,fid){
   document.getElementById('fovTitle').textContent=h.label;
   document.getElementById('fovGrid').innerHTML=h.items.map(id=>{
     const m=modOf(id);
-    let b=0;if(id==='messages')b=unread;if(id==='taches')b=pend;
+    let b=0;if(id==='messages')b=unread;if(id==='taches')b=pend;if(id==='alertes')b=alertesNew();
     return `<div class="fapp" onclick="tapApp(this,'${id}')">${b?`<span class="ndot">${b>9?'9+':b}</span>`:''}${appHtml(m)}<span>${m.label}</span></div>`;
   }).join('');
   const ov=document.getElementById('fov'),f=ov.querySelector('.folder');
@@ -1772,7 +2010,7 @@ function openModule(id){
   if(id==='alertes'){renderAlertes();go('alertes');return;}
   if(id==='taches'){openTaches();return;}
   if(id==='controle'){openControle();return;}
-  if(id==='arrete'){openUrl('arrete-circulation-16-04-2021.pdf');return;}
+  if(id==='arrete'){go('arrete');return;}
   if(id==='planning'){if(PLANNING_URL)openUrl(PLANNING_URL);else uiToast('Lien planning à configurer','err');return;}
   if(id==='carburant'){openCarburant();return;}
   if(id==='km'){openKm();return;}
@@ -1879,7 +2117,7 @@ function showMsgPill(n){
 }
 function hideMsgPill(){clearTimeout(_pillT);const el=document.getElementById('msgPill');if(el)el.classList.remove('on');}
 function openMsgPill(){hideMsgPill();openMessages();}
-function goLogin(){detachMessages();hideMsgPill();go('login');}
+function goLogin(){detachMessages();detachAlertes();hideMsgPill();go('login');}
 /* ---------- Son de cloche (Web Audio, sans fichier) ---------- */
 let _actx=null;
 function _ensureAudio(){
@@ -1991,11 +2229,36 @@ function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); go('hub');
 
 /* ===== ALERTES ===== */
 const ALERTE_TYPES=['Retard','Problème véhicule','Problème site','Accident','Autre'];
+let _alUnsub=null;
+function alSeenKey(){return 'al_seen_'+(S.chauffeur?S.chauffeur.id:'');}
+function getAlSeen(){try{return parseInt(localStorage.getItem(alSeenKey())||'0',10)||0;}catch(e){return 0;}}
+function markAlSeen(at){try{if((at||0)>getAlSeen())localStorage.setItem(alSeenKey(),String(at));}catch(e){}}
+function alertesNew(){const me=S.chauffeur?S.chauffeur.id:'';const seen=getAlSeen();return (S.alertes||[]).filter(r=>(r.at||0)>seen&&r.from!==me).length;}
+function attachAlertes(){
+  if(_alUnsub)return;
+  S.alertes=S.alertes||[];
+  _alUnsub=db.collection('chauffeurs_alertes').orderBy('at','desc').limit(6).onSnapshot(snap=>{
+    S.alertes=snap.docs.map(d=>d.data());
+    if(isOn('alertes')){paintAlertes();if(S.alertes.length)markAlSeen(S.alertes[0].at);}
+    else if(isOn('hub'))renderHub();
+  },e=>console.warn('alertes listener',e));
+}
+function detachAlertes(){if(_alUnsub){_alUnsub();_alUnsub=null;}}
+function paintAlertes(){
+  const el=document.getElementById('alHist');if(!el)return;
+  const rows=S.alertes||[];
+  el.innerHTML=rows.length?rows.map(r=>`<div class="glass hist-row">
+      <div class="h1"><b>${r.type||''}</b><span class="dt">${frDate(r)}</span></div>
+      ${r.message?`<div class="meta">${(r.message||'').replace(/</g,'&lt;')}</div>`:''}
+      <div class="meta" style="opacity:.7">${(r.fromName||'').trim()||'Chauffeur'}${r.vehicule?' · '+r.vehicule:''}</div></div>`).join(''):'<div class="msg-empty">Aucune alerte</div>';
+}
 function renderAlertes(){
   document.getElementById('alText').value='';
   const sel=document.getElementById('alType');
   sel.innerHTML='<option value="">— Choisir —</option>'+ALERTE_TYPES.map(t=>`<option>${t}</option>`).join('');
   sel.value='';
+  paintAlertes();
+  if(S.alertes&&S.alertes.length)markAlSeen(S.alertes[0].at);
 }
 async function sendAlerte(){
   const type=document.getElementById('alType').value;
@@ -2095,21 +2358,46 @@ function openEntretien(){
   sel.innerHTML='<option value="">— Choisir —</option>'+ENTRETIEN_TYPES.map(t=>`<option>${t}</option>`).join('');
   sel.value='';
   go('entretien');
-  loadHist('chauffeurs_entretien','entHist',r=>`<div class="glass hist-row">
+  renderEntretien();
+}
+function entRow(r,withBtn){
+  return `<div class="glass hist-row">
     <div class="h1"><b><span class="htype">${r.type||''}</span>${r.km?r.km+' km':''}</b><span class="dt">${frDate(r)}</span></div>
-    ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}</div>`);
+    ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}
+    ${withBtn?`<button class="t-btn" style="margin-top:8px" onclick="clotureEntretien('${r.id}')">Clôturer</button>`:''}</div>`;
+}
+async function renderEntretien(){
+  const open=document.getElementById('entOpen'),hist=document.getElementById('entHist');
+  open.innerHTML='<div class="msg-empty">Chargement…</div>';hist.innerHTML='';
+  try{
+    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).get();
+    let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+    rows.sort((a,b)=>(b.at||0)-(a.at||0));
+    const ouverts=rows.filter(r=>r.statut==='ouvert');
+    const clos=rows.filter(r=>r.statut!=='ouvert').slice(0,20);
+    open.innerHTML=ouverts.length?ouverts.map(r=>entRow(r,true)).join(''):'<div class="msg-empty">Aucun ticket ouvert</div>';
+    hist.innerHTML=clos.length?clos.map(r=>entRow(r,false)).join(''):'<div class="msg-empty">Aucun entretien clôturé</div>';
+  }catch(e){console.warn('entretien',e);open.innerHTML='<div class="msg-empty">Lecture impossible</div>';hist.innerHTML='';}
+}
+async function clotureEntretien(id){
+  const ok=await uiConfirm('Clôturer le ticket','Confirmer que cet entretien est fait ?','Clôturer');
+  if(!ok)return;
+  try{
+    await db.collection('chauffeurs_entretien').doc(id).update({statut:'cloture',clotureAt:Date.now(),clotureBy:S.chauffeur.id,clotureNom:chNom()});
+    uiToast('Ticket clôturé','ok');renderEntretien();
+  }catch(e){uiToast('Échec clôture','err');}
 }
 async function saveEntretien(){
   const type=document.getElementById('entType').value;
   if(!type){uiToast('Choisis un type','err');return;}
   const KM=parseInt(document.getElementById('entKm').value,10)||null;
   const note=(document.getElementById('entNote').value||'').trim();
-  const ok=await uiConfirm('Enregistrer l\'entretien',type+(KM?' · '+KM+' km':'')+' sur '+S.vehicule.id+' ?','Enregistrer');
+  const ok=await uiConfirm('Ouvrir le ticket',type+(KM?' · '+KM+' km':'')+' sur '+S.vehicule.id+' ?','Ouvrir');
   if(!ok)return;
   try{
-    await db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type,km:KM,note,at:Date.now()});
+    await db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()});
     setCurKm(KM);
-    uiToast('Entretien enregistré','ok');openEntretien();
+    uiToast('Ticket ouvert','ok');openEntretien();
   }catch(e){uiToast('Échec enregistrement','err');}
 }
 
@@ -2163,6 +2451,10 @@ async function finishDay(){
     }catch(e){}
   }
   go('end');
+}
+async function askChangeVehicule(){
+  const ok=await uiConfirm('Changer de camion','Tu vas quitter ta tournée en cours. Le contrôle du nouveau camion sera redemandé.','Changer');
+  if(ok)backToVehicule();
 }
 function backToVehicule(){
   try{stopGeo();}catch(e){}
@@ -2250,7 +2542,9 @@ function openRap(){
   document.getElementById('rapVeh').textContent=S.vehicule.id;
   document.getElementById('rapObjet').value='';document.getElementById('rapDesc').value='';
   PH['rap']=[];renderThumbs('rap','rapThumbs');
+  _sigDirty=false;
   go('rapport');
+  setTimeout(function(){initSig('rapSig');},80);
 }
 async function saveRap(){
   const objet=(document.getElementById('rapObjet').value||'').trim();
@@ -2265,6 +2559,7 @@ async function saveRap(){
     const ref=await db.collection('chauffeurs_rapports').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()});
     let urls=[];
     if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('rapports',ref.id,photos);if(urls.length)await ref.update({photos:urls});}
+    if(_sigDirty){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');const su=await uploadPhotos('rapports',ref.id,[{data:sig,type:'signature'}]);if(su.length)await ref.update({signature:su[0].url});}catch(e){}}
     uiToast(!photos.length?'Rapport envoyé':(urls.length?'Rapport + photos envoyés':'Rapport envoyé (photos non transmises)'),(!photos.length||urls.length)?'ok':'err');
     openRap();
   }catch(e){uiToast('Échec envoi','err');}
@@ -2272,9 +2567,10 @@ async function saveRap(){
 }
 
 /* --- État des lieux (+ signature) --- */
-let _sigCtx=null,_sigDraw=false,_sigDirty=false;
-function initSig(){
-  const c=document.getElementById('edlSig');if(!c)return;
+let _sigCtx=null,_sigDraw=false,_sigDirty=false,_sigEl=null;
+function initSig(id){
+  const c=document.getElementById(id||'edlSig');if(!c)return;
+  _sigEl=c;
   const rect=c.getBoundingClientRect();if(!rect.width)return;
   c.width=Math.round(rect.width*2);c.height=300;
   const ctx=c.getContext('2d');ctx.scale(2,2);
@@ -2287,7 +2583,7 @@ function initSig(){
   c.onmousedown=start;c.onmousemove=move;c.onmouseup=end;c.onmouseleave=end;
   c.ontouchstart=start;c.ontouchmove=move;c.ontouchend=end;
 }
-function clearSig(){if(_sigCtx){const c=document.getElementById('edlSig');_sigCtx.clearRect(0,0,c.width,c.height);_sigDirty=false;}}
+function clearSig(){if(_sigCtx&&_sigEl){_sigCtx.clearRect(0,0,_sigEl.width,_sigEl.height);_sigDirty=false;}}
 let _edlMandatory=false;
 function openEdl(mandatory){
   _edlMandatory=!!mandatory;
@@ -2310,7 +2606,7 @@ async function saveEdl(){
     const ref=await db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:rem,photos:[],signature:null,at:Date.now()});
     const patch={};
     if(ph.length){busy('Envoi des photos…');const u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)patch.photos=u;}
-    if(_sigDirty){busy('Envoi de la signature…');const sig=document.getElementById('edlSig').toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
+    if(_sigDirty){busy('Envoi de la signature…');const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
     if(Object.keys(patch).length)await ref.update(patch);
     markEdlDone();
     uiToast('Déclaration enregistrée','ok');
