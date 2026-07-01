@@ -327,6 +327,10 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .msg-form textarea{flex:1;border:1px solid var(--line);background:var(--glass-strong);border-radius:16px;padding:12px 15px;font-size:14px;color:var(--ink);resize:none;max-height:90px;outline:none}
 .msg-send{width:48px;height:48px;border-radius:15px;border:none;background:linear-gradient(135deg,var(--navy),var(--navy2));display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .msg-send svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2}
+.emoji-btn{width:48px;height:48px;border-radius:15px;border:1px solid var(--line);background:var(--glass-strong);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.emoji-btn svg{width:22px;height:22px;stroke:var(--navy);fill:none;stroke-width:2}
+.emoji-item{border:none;background:transparent;font-size:22px;line-height:1;padding:5px;border-radius:8px;cursor:pointer}
+.emoji-item:active{background:var(--glass-strong)}
 
 /* ALERTES */
 .al-send{width:100%;border:none;border-radius:18px;padding:16px;font-size:16px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--red),#ef4444);box-shadow:0 10px 24px rgba(220,38,38,.28);transition:transform .12s;margin-top:6px}
@@ -353,6 +357,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .hist-row .dt{font-size:12px;color:var(--sub);font-weight:600;white-space:nowrap}
 .hist-row .meta{font-size:13px;color:var(--sub);font-weight:600;margin-top:3px}
 .htype{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(30,60,114,.1);color:var(--navy);margin-right:6px}
+.ano-ph{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.ano-ph img{width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;cursor:pointer}
 .photo-btn{width:100%;border:1.5px dashed rgba(30,60,114,.4);background:var(--glass-strong);border-radius:14px;padding:13px;font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
 .photo-btn svg{width:18px;height:18px;stroke:var(--navy);stroke-width:2;fill:none}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -386,6 +392,10 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .nav-btn:active{transform:scale(.98)}
 .route-btn{border:none;background:rgba(30,60,114,.1);color:var(--navy);font-size:11px;font-weight:800;padding:5px 11px;border-radius:9px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-right:8px}
 .route-btn svg{width:13px;height:13px;stroke:var(--navy);stroke-width:2.2;fill:none}
+.reforme-btn{width:100%;border:none;border-radius:14px;padding:14px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--navy);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin:0 0 12px;transition:transform .12s}
+.reforme-btn:active{transform:scale(.97)}
+.reforme-btn svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.reforme-btn.done{background:#16a34a;cursor:default}
 .route-item{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);background:var(--glass-strong);border-radius:14px;padding:14px;margin-bottom:9px;cursor:pointer;text-decoration:none}
 .route-item .ri-ic{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--navy),var(--navy2));display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .route-item .ri-ic svg{width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none}
@@ -692,6 +702,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="glass rcp-sel" id="rcpSel" onclick="openRcpSheet()"></div>
     <div class="msg-list" id="msgList"></div>
     <div class="msg-form">
+      <div id="emojiPanel" style="display:none;flex-wrap:wrap;gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);max-height:200px;overflow-y:auto;z-index:50"></div>
+      <button type="button" class="emoji-btn" onclick="toggleEmojiPanel()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
       <textarea id="msgInput" rows="1" placeholder="Écrire un message…"></textarea>
       <button class="msg-send" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
     </div>
@@ -723,6 +735,10 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <button class="save-btn" onclick="saveCarburant()">Enregistrer le plein</button>
     </div>
     <div class="sec-title">Derniers pleins</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div class="sel-wrap" style="flex:1;margin:0"><select id="carbFType" onchange="renderCarbHist()"><option value="">Tous les types</option><option value="Gasoil">Gasoil</option><option value="AdBlue">AdBlue</option></select></div>
+      <div class="sel-wrap" style="flex:1;margin:0"><select id="carbFMois" onchange="renderCarbHist()"><option value="">Tous les mois</option></select></div>
+    </div>
     <div id="carbHist"></div>
   </section>
 
@@ -782,6 +798,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       </div>
       <button class="save-btn" onclick="saveAno()">Signaler l'anomalie</button>
     </div>
+      <div class="sec-title" style="margin-top:22px">Historique — ce camion</div>
+      <div id="anoHist"></div>
   </section>
 
   <!-- RAPPORT CIRCONSTANCIÉ -->
@@ -817,6 +835,38 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="sig-wrap"><canvas id="edlSig"></canvas><button type="button" class="sig-clear" onclick="clearSig()">Effacer</button></div>
       <button class="save-btn" style="margin-top:16px" onclick="saveEdl()">Valider la déclaration</button>
       <button class="save-btn alt" style="margin-top:10px" onclick="saveNoDamage()">Aucun dommage à signaler</button>
+    </div>
+  </section>
+
+  <!-- PRISE DE POSTE -->
+  <section class="screen" id="s-prise">
+    <div class="sec-title">Prise de poste — <span id="ppVeh"></span></div>
+    <div id="ppGate" class="edl-gate"><b>Prise de poste</b> — un coup d'œil au véhicule avant de partir.</div>
+    <div class="glass form-card" id="ppHome">
+      <button class="save-btn" style="background:#16a34a" onclick="ppRas()">Tout est OK</button>
+      <button class="save-btn" style="margin-top:10px;background:transparent;color:#DC2626;border:1.5px solid #DC2626" onclick="ppShowForm()">Signaler un problème</button>
+    </div>
+    <div class="glass form-card" id="ppForm" style="display:none">
+      <div class="fld"><label>Détail du problème</label><textarea id="ppDetail" placeholder="Ex : feu arrière droit cassé, rétro fissuré…"></textarea></div>
+      <div class="sub-lbl">Photos (3 max)</div>
+      <input type="file" id="ppFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('pp',this,'ppThumbs')">
+      <button type="button" class="photo-btn" onclick="document.getElementById('ppFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
+      <div class="thumbs" id="ppThumbs"></div>
+      <button class="save-btn" style="margin-top:16px" onclick="ppSaveProbleme()">Valider le signalement</button>
+      <div onclick="ppBack()" style="text-align:center;margin-top:12px;color:#6b7280;cursor:pointer">Annuler</div>
+    </div>
+  </section>
+
+  <!-- VALIDATION TÂCHE -->
+  <section class="screen" id="s-tache">
+    <div class="back" onclick="go('taches')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Tâches</div>
+    <div class="sec-title" style="margin-bottom:4px">Marquer fait</div>
+    <div id="tacheLabel" style="font-size:18px;font-weight:700;margin:0 0 14px;color:var(--navy)"></div>
+    <div class="glass form-card">
+      <input type="file" id="tacheFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('tache',this,'tacheThumbs')">
+      <button type="button" class="photo-btn" onclick="document.getElementById('tacheFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo (optionnel)</button>
+      <div class="thumbs" id="tacheThumbs"></div>
+      <button class="save-btn" style="margin-top:16px;background:#16a34a" onclick="confirmTache()">Marquer fait</button>
     </div>
   </section>
 
@@ -924,7 +974,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v36';
+const APP_VERSION='v40';
+const APPS_SCRIPT_URL=''; /* Apps Script chauffeurs (mail réforme + upload photo) — coller l'URL /exec après déploiement */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -1209,26 +1260,49 @@ function cancelReco(){
 
 /* ---------- VEHICULES ---------- */
 function renderVehicules(){
-  const opts='<option value="">— Choisis ton camion —</option>'+VEHICULES.map(v=>`<option value="${v.id}">${v.id}${v.type?' · '+v.type:''}</option>`).join('');
+  const opts='<option value="">— Choisis ton camion —</option>'+VEHICULES.map(v=>`<option value="${v.id}">${v.id}${v.type?' · '+v.type:''}</option>`).join('')+'<option value="RELAIS">Camion relais — panne</option>';
   document.getElementById('vehList').innerHTML=`
     <div class="fld"><div class="sel-wrap"><select id="vehSel" onchange="onVehSel()">${opts}</select></div></div>
     <div id="vehDetail"></div>
-    <button class="save-btn" id="vehGo" onclick="confirmVehicule()" disabled style="margin-top:14px">Démarrer ma journée</button>`;
+    <button class="save-btn" id="vehGo" onclick="confirmVehicule()" disabled style="margin-top:14px">Démarrer ma journée</button>
+    <button onclick="openMessagesPreDemarrage()" style="position:relative;width:100%;margin-top:10px;border:1px solid #1E5FAD;background:transparent;color:#1E5FAD;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1E5FAD" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Voir mes messages<span id="vehMsgBadge" style="display:none;position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;padding:0 6px;box-sizing:border-box"></span></button>`;
+  updateVehMsgBadge();
 }
 function onVehSel(){
   const id=document.getElementById('vehSel').value;
+  const d=document.getElementById('vehDetail');
+  if(id==='RELAIS'){
+    var tours=[];VEHICULES.forEach(function(v){(v.tournees||[]).forEach(function(t){if(tours.indexOf(String(t))<0)tours.push(String(t));});});tours.sort();
+    d.innerHTML='<div class="glass" style="margin-top:12px;padding:14px;cursor:default">'
+      +'<div class="fld"><label>Plaque du camion relais</label><input id="relaisPlaque" type="text" placeholder="AB-123-CD" oninput="onRelaisChange()" style="text-transform:uppercase"></div>'
+      +'<div class="fld"><label>Tournée assurée</label><div class="sel-wrap"><select id="relaisTournee" onchange="onRelaisChange()"><option value="">— Choisir —</option>'+tours.map(function(t){return '<option value="'+t+'">T'+t+'</option>';}).join('')+'</select></div></div>'
+      +'</div>';
+    document.getElementById('vehGo').disabled=true;
+    return;
+  }
   document.getElementById('vehGo').disabled=!id;
-  const v=VEHICULES.find(x=>x.id===id);const d=document.getElementById('vehDetail');
+  const v=VEHICULES.find(x=>x.id===id);
   if(!v){d.innerHTML='';return;}
   const pills=(v.tournees||[]).map(t=>`<span class="pill">T${t}</span>`).join('')+(v.horaires?`<span class="pill h">${v.horaires}</span>`:'');
   d.innerHTML=`<div class="glass veh" style="margin-top:12px;cursor:default">
     <div class="veh-ic"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>
     <div class="veh-info"><b>${v.id}</b><div class="t">${v.type||''}${v.prestataire?' · '+v.prestataire:''}</div><div class="tour-pills">${pills}</div></div></div>`;
 }
-function confirmVehicule(){const id=document.getElementById('vehSel').value;if(id)pickVehicule(id);}
+function onRelaisChange(){var p=(document.getElementById('relaisPlaque').value||'').trim();var t=document.getElementById('relaisTournee').value;document.getElementById('vehGo').disabled=!(p&&t);}
+function confirmVehicule(){
+  const id=document.getElementById('vehSel').value;
+  if(id==='RELAIS'){
+    const p=(document.getElementById('relaisPlaque').value||'').trim().toUpperCase();
+    const t=document.getElementById('relaisTournee').value;
+    if(!p||!t)return;
+    pickVehicule({id:p,type:'Camion relais',tournees:[t],plaque:p,relais:true});
+    return;
+  }
+  if(id)pickVehicule(id);
+}
 
 async function pickVehicule(id){
-  S.vehicule=VEHICULES.find(v=>v.id===id);
+  S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('jourVeh').textContent=S.vehicule.id;
   document.getElementById('jourSub').textContent='Ma journée · '+(S.vehicule.tournees||[]).map(t=>'T'+t).join(' puis ');
@@ -1238,6 +1312,12 @@ async function pickVehicule(id){
   const nums=S.vehicule.tournees||[];
   const snaps=await Promise.all(nums.map(n=>db.collection('chauffeurs_tournees').doc(n).get()));
   S.tournees=snaps.filter(s=>s.exists).map(s=>s.data());
+
+  // Arrêts du jour : une tournée peut définir ses arrêts par jour (arrets_par_jour).
+  // On résout la liste d'aujourd'hui dans t.arrets ; tout le reste du code continue d'utiliser t.arrets.
+  // Repli : si arrets_par_jour est absent (ancienne structure), on garde t.arrets tel quel (aucune régression).
+  const jourAuj=JOURS_FR[new Date(TODAY+'T12:00:00Z').getUTCDay()];
+  S.tournees.forEach(t=>{ if(t.arrets_par_jour) t.arrets=t.arrets_par_jour[jourAuj]||[]; });
 
   // listener temps réel sur les statuts du jour (1 doc / tournée)
   if(S.unsub)S.unsub();
@@ -1251,12 +1331,16 @@ async function pickVehicule(id){
       if(isOn('hub'))renderHub();
     },err=>{console.warn('statuts',err);renderJournee();});
 
+  if(S.vehicule.relais){var _tn=(S.vehicule.tournees||[])[0];if(_tn){try{db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+_tn).set({date:TODAY,tournee:_tn,relais:{plaque:S.vehicule.plaque||S.vehicule.id,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),at:Date.now()}},{merge:true});}catch(e){}}}
   if(!S.unsubIn)attachMessages();
   renderJournee();
   await loadTaches();
   renderHub();
-  // Prise de poste : état des lieux + chargement obligatoires (1×/jour/camion)
-  if(!edlDoneToday()) openEdl(true);
+  // Prise de poste : état des lieux + chargement (1×/jour/camion).
+  // Aucune tournée aujourd'hui (week-end / jour sans arrêt) → on saute ces étapes et on va à l'accueil.
+  const aDesArrets=S.tournees.some(t=>(t.arrets||[]).length>0);
+  if(!aDesArrets) enterHub();
+  else if(!edlDoneToday()) openPrisePoste(true);
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
 }
@@ -1278,9 +1362,15 @@ function statutArret(num,ordre){
   return d&&d.arrets&&d.arrets[ordre]?d.arrets[ordre]:null;
 }
 function renderJournee(){
+  const jourAuj=JOURS_FR[new Date(TODAY+'T12:00:00Z').getUTCDay()];
   let html='',total=0,done=0,curSet=false,curLabel='—';
   S.tournees.forEach(t=>{
     html+=`<div class="tgroup"><span>Tournée ${t.numero}</span><span class="hr"></span>${(t.arrets||[]).length>1?`<button class="route-btn" onclick="openCarteTour('${t.numero}')"><svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v16M15 6v16"/></svg>Itinéraire</button>`:''}<span>${(t.arrets||[]).length} arrêts</span></div>`;
+    if(t.numero==='82'&&jourAuj==='jeudi'){
+      const rf=S.statuts[TODAY+'_T'+t.numero];
+      const rfait=!!(rf&&rf.reforme&&rf.reforme.ok);
+      html+=rfait?`<button class="reforme-btn done" disabled><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Réforme faite</button>`:`<button class="reforme-btn" onclick="openReforme('${t.numero}')"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Réforme</button>`;
+    }
     (t.arrets||[]).slice().sort(bySeq).forEach(a=>{
       total++;
       const st=statutArret(t.numero,a.ordre);
@@ -1293,6 +1383,7 @@ function renderJournee(){
         ${a.acces?`<span class="acc">${a.acces}</span>`:''}</div>`;
     });
   });
+  if(total===0){ html=`<div class="glass" style="text-align:center;padding:28px 18px;color:var(--sub);font-weight:500">Pas de tournée aujourd'hui</div>`; }
   document.getElementById('jourBody').innerHTML=html;
   document.getElementById('progCount').textContent=done+' / '+total;
   document.getElementById('progBar').style.width=(total?Math.round(done/total*100):0)+'%';
@@ -1306,8 +1397,9 @@ function openStop(num,ordre){
   const a=(t.arrets||[]).find(x=>x.ordre===ordre);
   S.curStop={num,ordre,a};
   const st=statutArret(num,ordre);
-  const doneBanner=st&&st.ok?`<div class="done-banner"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-     Dépose validée ${st.mode==='qr'?'(QR scanné)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}</div>`:'';
+  const doneBanner=st&&st.ok?(st.ferme?`<div class="done-banner" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569"><svg viewBox="0 0 24 24" style="stroke:#475569"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+     Service fermé (temporaire)${st.motif?(' — '+(''+st.motif).replace(/</g,'&lt;')):''}</div>`:`<div class="done-banner"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+     Dépose validée ${st.mode==='qr'?'(QR scanné)':st.mode==='photo'?'(photo)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}</div>`):'';
   document.getElementById('detBody').innerHTML=`
     ${doneBanner}
     <div class="glass det-card">
@@ -1315,8 +1407,9 @@ function openStop(num,ordre){
       <h2>${a.client}</h2>
       <div class="det-row"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
         <div><div class="l">Adresse</div><div class="v">${a.adresse||'—'}</div></div></div>
-      ${a.acces?`<div class="det-row"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <div><div class="l">Accès</div><span class="acc-big">${a.acces}</span></div></div>`:''}
+      <div class="det-row"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div style="flex:1"><div class="l">Accès</div><span class="acc-big" id="accVal">${a.acces||'—'}</span></div>
+        <button onclick="openCodeEdit('${num}',${ordre})" style="margin-left:auto;align-self:center;flex:none;border:1px solid #1E5FAD;background:#fff;color:#1E5FAD;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer">Modifier</button></div>
       ${a.contact?`<div class="det-row"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 4h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 11.8a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
         <div><div class="l">Contact</div><div class="v">${a.contact}</div></div></div>`:''}
       ${a.consignes?`<div class="det-row"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
@@ -1326,10 +1419,70 @@ function openStop(num,ordre){
     ${st&&st.ok?'':`
     <button class="scan-btn" onclick="scanStop('qr')"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M4 12h16"/></svg>
       <div><b>Scanner le QR du site</b><span>Valider la dépose chez l'adhérent</span></div></button>
-    <button class="manual" onclick="scanStop('manuel')">Pas de QR — valider manuellement</button>`}
+    <button class="manual" onclick="prendrePhoto()">Pas de QR — prendre une photo</button>
+    <button class="manual" onclick="openServiceFerme('${num}',${ordre})" style="border-color:#475569;color:#475569">Service fermé (temporaire)</button>`}
     <button class="ano-btn" onclick="openAno('${(a.client||'').replace(/'/g,"\\'")}')"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/></svg> Signaler une anomalie</button>
   `;
   go('det');
+}
+
+/* ---------- MODIFIER LE CODE D'ACCÈS (remonte pour tous) ---------- */
+let _codeCtx=null;
+function openCodeEdit(num,ordre){
+  const t=S.tournees.find(x=>String(x.numero)===String(num));
+  const a=t&&(t.arrets||[]).find(x=>x.ordre===ordre);
+  if(!a)return;
+  _codeCtx={num:String(num),client:a.client||'',ordre:ordre};
+  let ov=document.getElementById('codeOv');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='codeOv';
+    ov.style.cssText='display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,24,48,.5);align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,.25)">'
+      +'<div style="font-size:16px;font-weight:700;color:#1E3C72">Modifier le code d’accès</div>'
+      +'<div id="codeOvSite" style="font-size:13px;color:#6b7280;margin:3px 0 12px"></div>'
+      +'<input id="codeOvInput" type="text" autocomplete="off" placeholder="Ex : 1520A, interphone, badge…" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:10px;padding:11px;font-size:15px;font-family:inherit">'
+      +'<div style="display:flex;gap:10px;margin-top:16px">'
+      +'<button id="codeOvCancel" style="flex:1;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:11px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Annuler</button>'
+      +'<button id="codeOvSave" style="flex:1;border:0;background:#1E5FAD;color:#fff;border-radius:11px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Enregistrer</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('codeOvCancel').onclick=closeCodeEdit;
+    document.getElementById('codeOvSave').onclick=saveCodeEdit;
+    ov.addEventListener('click',function(e){if(e.target===ov)closeCodeEdit();});
+  }
+  document.getElementById('codeOvSite').textContent=a.client||'';
+  document.getElementById('codeOvInput').value=a.acces||'';
+  ov.style.display='flex';
+  setTimeout(function(){var i=document.getElementById('codeOvInput');if(i)i.focus();},50);
+}
+function closeCodeEdit(){var ov=document.getElementById('codeOv');if(ov)ov.style.display='none';}
+async function saveCodeEdit(){
+  if(!_codeCtx)return;
+  const v=(document.getElementById('codeOvInput').value||'').trim();
+  const num=_codeCtx.num,client=_codeCtx.client;
+  closeCodeEdit();
+  busy('Mise à jour du code…');
+  try{
+    const ref=db.collection('chauffeurs_tournees').doc(String(num));
+    const snap=await ref.get();const data=snap.data()||{};
+    const patch={};
+    if(Array.isArray(data.arrets)){
+      patch.arrets=data.arrets.map(function(x){return x.client===client?Object.assign({},x,{acces:v}):x;});
+    }
+    if(data.arrets_par_jour&&typeof data.arrets_par_jour==='object'){
+      var apj={};
+      Object.keys(data.arrets_par_jour).forEach(function(j){
+        apj[j]=(data.arrets_par_jour[j]||[]).map(function(x){return x.client===client?Object.assign({},x,{acces:v}):x;});
+      });
+      patch.arrets_par_jour=apj;
+    }
+    if(Object.keys(patch).length)await ref.update(patch);
+    S.tournees.forEach(function(t){if(String(t.numero)===String(num))(t.arrets||[]).forEach(function(x){if(x.client===client)x.acces=v;});});
+    var sp=document.getElementById('accVal');if(sp)sp.textContent=v||'—';
+    uiToast('Code mis à jour pour tous','ok');
+  }catch(e){uiToast('Échec mise à jour','err');}
+  finally{busyDone();}
 }
 
 /* ---------- VALIDATION DEPOSE ---------- */
@@ -1350,6 +1503,91 @@ async function validateDepose(num,ordre,mode,client){
     uiToast('Dépose validée — '+(client||''),'ok');
     go('jour'); // le listener onSnapshot rafraîchira la journée
   }catch(e){uiToast('Erreur enregistrement','err');}
+}
+
+/* ---------- SERVICE FERMÉ (temporaire) ---------- */
+let _sfCtx=null;
+function openServiceFerme(num,ordre){
+  const t=S.tournees.find(x=>String(x.numero)===String(num));
+  const a=t&&(t.arrets||[]).find(x=>x.ordre===ordre);
+  if(!a)return;
+  _sfCtx={num:String(num),ordre:ordre,client:a.client||''};
+  let ov=document.getElementById('sfOv');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='sfOv';
+    ov.style.cssText='display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,24,48,.5);align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,.25)">'
+      +'<div style="font-size:16px;font-weight:700;color:#1E3C72">Service fermé temporairement</div>'
+      +'<div id="sfOvSite" style="font-size:13px;color:#6b7280;margin:3px 0 12px"></div>'
+      +'<label style="font-size:13px;font-weight:600;color:#475569">Motif (optionnel)</label>'
+      +'<input id="sfOvInput" type="text" autocomplete="off" placeholder="Ex : congés jusqu’au 15/08" style="width:100%;box-sizing:border-box;margin-top:6px;border:1px solid #d1d5db;border-radius:10px;padding:11px;font-size:14px;font-family:inherit">'
+      +'<div style="display:flex;gap:10px;margin-top:16px">'
+      +'<button id="sfOvCancel" style="flex:1;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:11px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Annuler</button>'
+      +'<button id="sfOvSave" style="flex:1;border:0;background:#475569;color:#fff;border-radius:11px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Confirmer</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('sfOvCancel').onclick=closeServiceFerme;
+    document.getElementById('sfOvSave').onclick=saveServiceFerme;
+    ov.addEventListener('click',function(e){if(e.target===ov)closeServiceFerme();});
+  }
+  document.getElementById('sfOvSite').textContent=a.client||'';
+  document.getElementById('sfOvInput').value='';
+  ov.style.display='flex';
+  setTimeout(function(){var i=document.getElementById('sfOvInput');if(i)i.focus();},50);
+}
+function closeServiceFerme(){var ov=document.getElementById('sfOv');if(ov)ov.style.display='none';}
+async function saveServiceFerme(){
+  if(!_sfCtx)return;
+  var num=_sfCtx.num,ordre=_sfCtx.ordre,client=_sfCtx.client;
+  var motif=(document.getElementById('sfOvInput').value||'').trim();
+  closeServiceFerme();
+  try{
+    await db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).set({
+      date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
+      arrets:{[ordre]:{ok:true,ferme:true,mode:'ferme',at:Date.now(),client:client,motif:motif||null}}
+    },{merge:true});
+    uiToast('Service fermé noté','ok');
+    go('jour');
+  }catch(e){uiToast('Erreur enregistrement','err');}
+}
+
+/* ---------- REFORME (T82, jeudi) : mail « réforme faite » ---------- */
+async function openReforme(num){
+  const ok=await uiConfirm('Réforme faite ?','Un mail « réforme faite » sera envoyé à la logistique.','Envoyer');
+  if(!ok)return;
+  if(!APPS_SCRIPT_URL){uiToast('URL Apps Script non configurée','err');return;}
+  try{
+    await fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'mail',tournee:num,chauffeur:chNom(),date:TODAY})});
+    await db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).set({date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,reforme:{ok:true,at:Date.now(),chauffeur:chNom()}},{merge:true});
+    uiToast('Mail « réforme faite » envoyé','ok');
+  }catch(e){uiToast('Échec envoi — réessaie','err');}
+}
+
+/* ---------- VALIDATION PAR PHOTO (fallback si pas de QR) ---------- */
+let _photoCtx=null;
+function prendrePhoto(){
+  const {num,ordre,a}=S.curStop;
+  _photoCtx={num,ordre,client:a.client||''};
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';inp.setAttribute('capture','environment');inp.style.display='none';
+  inp.onchange=function(){var f=inp.files&&inp.files[0];inp.remove();onPhotoChosen(f);};
+  document.body.appendChild(inp);inp.click();
+}
+async function onPhotoChosen(file){
+  if(!file||!_photoCtx)return;
+  var num=_photoCtx.num,ordre=_photoCtx.ordre,client=_photoCtx.client;
+  if(!APPS_SCRIPT_URL){uiToast('URL Apps Script non configurée','err');return;}
+  uiToast('Compression de la photo…','ok');
+  try{
+    var dataUrl=await compressPhoto(file,1024,0.55);
+    var b64=dataUrl.split(',')[1];
+    var nom='T'+num+'_arret'+ordre+'_'+(client||'').replace(/[^a-zA-Z0-9]+/g,'-')+'_'+TODAY+'_'+Date.now()+'.jpg';
+    await fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'photo',image:b64,nom:nom,tournee:num,arret:ordre,client:client,chauffeur:chNom(),date:TODAY})});
+    await db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).set({date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,arrets:{[ordre]:{ok:true,mode:'photo',at:Date.now(),client:client,photo:nom}}},{merge:true});
+    uiToast('Dépose validée par photo','ok');
+    go('jour');
+  }catch(e){uiToast('Échec photo — réessaie','err');}
 }
 
 /* ---------- Scanner QR caméra (BarcodeDetector + repli jsQR) ---------- */
@@ -1418,6 +1656,20 @@ function startGeo(){
   _geoWatch=navigator.geolocation.watchPosition(onGeo,onGeoErr,{enableHighAccuracy:true,maximumAge:30000,timeout:25000});
 }
 function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWatch);_geoWatch=null;}}
+let _posRefreshing=false;
+function refreshPositionNow(){
+  if(_posRefreshing||!S.chauffeur||_geoWatch===null||!('geolocation' in navigator))return;
+  _posRefreshing=true;
+  navigator.geolocation.getCurrentPosition(function(pos){
+    _posRefreshing=false;
+    const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy;
+    _geoLast={t:Date.now(),lat,lng};                 // resync le throttle sur cette position fraiche
+    pushPosition(lat,lng,acc);
+    setGeoLine('on','Position partagee');
+    checkDepotReturn(lat,lng);
+  },function(){_posRefreshing=false;},{enableHighAccuracy:true,timeout:10000,maximumAge:0});
+}
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) refreshPositionNow(); });
 /* ===== Autorisations / réarmement (GPS, son, caméra) ===== */
 function openPerms(){go('perms');refreshPerms();}
 function setPerm(id,state,txt){
@@ -1759,17 +2011,18 @@ function cEmergencyMaps(){
 /* ===== TÂCHES RÉCURRENTES (rappels + traçage) ===== */
 // jour : 0=dim,1=lun,2=mar,3=mer,4=jeu,5=ven,6=sam — modifiable ici (plus tard piloté par l'app responsable)
 const TACHES=[
-  {id:'cabine', label:'Nettoyage intérieur cabine', jour:4, portee:'tous'},
-  {id:'caisse', label:'Lavage extérieur caisse',     jour:4, portee:'tous'},
-  {id:'reforme',label:'Gestion de la réforme',       jour:4, portee:'tournee', tournee:'82'}
+  {id:'caisse',    label:'Lavage extérieur',           jour:4,      portee:'tous'},
+  {id:'cabine',    label:'Nettoyage intérieur cabine', jour:5,      portee:'tous'},
+  {id:'reforme',   label:'Gestion de la réforme',      jour:4,      portee:'tournee', tournee:'82'},
+  {id:'caisse_int',label:'Nettoyage intérieur caisse', jour:'tous', portee:'tous'}
 ];
 const JOURS_FR=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
 let TACHE_DONE=new Set(),CUR_WEEK='';
 function isoWeek(d){d=new Date(d);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);const wk=1+Math.round(((d-w1)/86400000-3+((w1.getDay()+6)%7))/7);return d.getFullYear()+'-W'+(wk<10?'0'+wk:wk);}
 function tApplicable(t){return t.portee==='tous'||(t.portee==='tournee'&&(S.vehicule.tournees||[]).map(String).includes(String(t.tournee)));}
-function tKey(t){return t.portee==='tournee'?CUR_WEEK+'_'+t.id:CUR_WEEK+'_'+t.id+'_'+S.chauffeur.id;}
+function tKey(t){var k=CUR_WEEK+'_'+t.id;if(t.jour==='tous')k+='_'+TODAY;if(t.portee!=='tournee')k+='_'+S.chauffeur.id;return k;}
 function tDone(t){return TACHE_DONE.has(tKey(t));}
-function tDue(t){return new Date().getDay()>=t.jour;}
+function tDue(t){return t.jour==='tous'||new Date().getDay()>=t.jour;}
 function pendingTaches(){return TACHES.filter(t=>tApplicable(t)&&tDue(t)&&!tDone(t)).length;}
 async function loadTaches(){
   CUR_WEEK=isoWeek(new Date());TACHE_DONE=new Set();
@@ -1780,23 +2033,36 @@ function renderTaches(){
   const today=new Date().getDay();
   const items=TACHES.filter(tApplicable);
   document.getElementById('tachesBody').innerHTML=(items.map(t=>{
-    const done=tDone(t),due=today>=t.jour;
+    const done=tDone(t),due=(t.jour==='tous')||today>=t.jour;
     return `<div class="glass tache ${done?'done':''}">
       <div class="t-ic">${done?'<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>':'<svg viewBox="0 0 24 24"><path d="M19 11l-7 7-4-4"/><path d="M5 21V9l7-6 7 6"/></svg>'}</div>
-      <div class="t-tx"><b>${t.label}</b><span>${t.portee==='tournee'?'Tournée T'+t.tournee+' · ':''}À faire le ${JOURS_FR[t.jour]}</span></div>
+      <div class="t-tx"><b>${t.label}</b><span>${t.portee==='tournee'?'Tournée T'+t.tournee+' · ':''}${t.jour==='tous'?'À faire tous les jours':'À faire le '+JOURS_FR[t.jour]}</span></div>
       ${done?'<span class="t-ok">Fait</span>':`<button class="t-btn ${due?'':'soon'}" onclick="markTache('${t.id}')">Marquer fait</button>`}
     </div>`;
   }).join(''))||'<div class="msg-empty">Aucune tâche</div>';
 }
-async function markTache(id){
-  const t=TACHES.find(x=>x.id===id);if(!t)return;
-  const ok=await uiConfirm(t.label,'Confirmer que c\'est fait ?','Oui, c\'est fait');
+let _curTache=null;
+function markTache(id){
+  var t=TACHES.find(function(x){return x.id===id;});if(!t)return;
+  _curTache=id;
+  document.getElementById('tacheLabel').textContent=t.label;
+  PH['tache']=[];renderThumbs('tache','tacheThumbs');
+  go('tache');
+}
+async function confirmTache(){
+  var t=TACHES.find(function(x){return x.id===_curTache;});if(!t)return;
+  var ph=PH['tache']||[];
+  var ok=await uiConfirm(t.label,'Confirmer la tâche comme faite'+(ph.length?' ('+ph.length+' photo(s))':'')+' ?','Valider');
   if(!ok)return;
-  const key=tKey(t);
+  var key=tKey(t);
+  busy('Enregistrement…');
   try{
-    await db.collection('chauffeurs_taches_log').doc(key).set({tache:id,label:t.label,semaine:CUR_WEEK,jour:t.jour,portee:t.portee,tournee:t.tournee||null,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,at:Date.now()},{merge:true});
-    TACHE_DONE.add(key);uiToast('Tâche validée','ok');renderTaches();renderHub();
+    await db.collection('chauffeurs_taches_log').doc(key).set({tache:t.id,label:t.label,semaine:CUR_WEEK,jour:t.jour,portee:t.portee,tournee:t.tournee||null,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,photos:[],at:Date.now()},{merge:true});
+    if(ph.length){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');var u=await uploadPhotos('taches',key,ph.map(function(p){return {data:p.data,type:'photo'};}));if(u.length)await db.collection('chauffeurs_taches_log').doc(key).update({photos:u});}
+    TACHE_DONE.add(key);uiToast('Tâche validée','ok');
+    go('taches');renderTaches();renderHub();
   }catch(e){uiToast('Échec enregistrement','err');}
+  finally{busyDone();}
 }
 
 /* ===== CHARGEMENT / POIDS (fiche contrôle) ===== */
@@ -2127,11 +2393,19 @@ function playBell(){
     });
   }catch(e){}
 }
+function updateVehMsgBadge(){
+  var el=document.getElementById('vehMsgBadge');
+  if(!el)return;
+  var n=unreadCount();
+  el.textContent=n>99?'99+':String(n);
+  el.style.display=n>0?'flex':'none';
+}
 function mergeMsgs(){
   const all=Object.assign({},_msgIn,_msgOut);
   S.msgs=Object.keys(all).map(k=>all[k]).sort((a,b)=>(a.at||0)-(b.at||0));
   if(isOn('messages'))renderMessages();
   else if(isOn('hub'))renderHub();
+  updateVehMsgBadge();
 }
 function openMessages(){
   if(!S.unsubIn)attachMessages();
@@ -2186,18 +2460,38 @@ function renderMessages(){
   }).join('');
   el.scrollTop=el.scrollHeight;
 }
+const EMOJIS=['😀','😃','😄','🙂','😉','😊','😅','😂','🤣','😍','😎','🤔','😐','😴','😮','😢','😭','😡','👍','👎','👌','👏','🙏','💪','👋','✅','❌','⚠️','❤️','🔥','🎉','⏰','🚛','📦'];
+function fillEmojiPanel(){
+  var p=document.getElementById('emojiPanel');if(!p||p.dataset.filled)return;
+  p.innerHTML=EMOJIS.map(function(e){return '<button type="button" class="emoji-item" data-e="'+e+'">'+e+'</button>';}).join('');
+  p.addEventListener('click',function(ev){var b=ev.target.closest('.emoji-item');if(b)insertEmoji(b.getAttribute('data-e'));});
+  p.dataset.filled='1';
+}
+function toggleEmojiPanel(){
+  fillEmojiPanel();
+  var p=document.getElementById('emojiPanel');if(!p)return;
+  p.style.display=(p.style.display==='none'||!p.style.display)?'flex':'none';
+}
+function insertEmoji(e){
+  var ta=document.getElementById('msgInput');if(!ta)return;
+  var s=ta.selectionStart||0,end=ta.selectionEnd||0;
+  ta.value=ta.value.slice(0,s)+e+ta.value.slice(end);
+  var pos=s+e.length;ta.focus();try{ta.setSelectionRange(pos,pos);}catch(_){}
+}
 async function sendMessage(){
   const inp=document.getElementById('msgInput'),txt=(inp.value||'').trim();
   if(!txt||!S.msgTo)return;
   inp.value='';
+  var _ep=document.getElementById('emojiPanel');if(_ep)_ep.style.display='none';
   try{
     await db.collection('chauffeurs_messages').add({
       from:S.chauffeur.id, fromName:(S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||''),
-      to:S.msgTo, text:txt, vehicule:S.vehicule.id, at:Date.now()
+      to:S.msgTo, text:txt, vehicule:S.vehicule?S.vehicule.id:null, at:Date.now()
     });
   }catch(e){uiToast('Envoi impossible','err');inp.value=txt;}
 }
-function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); go('hub'); renderHub(); }
+function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); if(S.msgReturn==='veh'){S.msgReturn=null;go('veh');updateVehMsgBadge();return;} go('hub'); renderHub(); }
+function openMessagesPreDemarrage(){ S.msgReturn='veh'; openMessages(); }
 
 /* ===== ALERTES ===== */
 const ALERTE_TYPES=['Retard','Problème véhicule','Problème site','Accident','Autre'];
@@ -2266,14 +2560,35 @@ async function loadHist(coll,elId,rowFn){
 /* --- Carburant --- */
 function curKm(){try{return localStorage.getItem('km_'+TODAY)||'';}catch(e){return '';}}
 function setCurKm(v){if(v)try{localStorage.setItem('km_'+TODAY,String(v));}catch(e){}}
-function openCarburant(){
+let _pleins=[];
+function moisKeyCarb(r){var t=r.at||0;if(!t)return '';var d=new Date(t);var m=d.getMonth()+1;return d.getFullYear()+'-'+(m<10?'0':'')+m;}
+function moisLabelCarb(k){var p=k.split('-');var noms=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];return noms[parseInt(p[1],10)-1]+' '+p[0];}
+function remplirMoisCarb(){
+  var sel=document.getElementById('carbFMois');if(!sel)return;
+  var cur=sel.value,mois=[],vus={};
+  _pleins.forEach(function(r){var k=moisKeyCarb(r);if(k&&!vus[k]){vus[k]=1;mois.push(k);}});
+  sel.innerHTML='<option value="">Tous les mois</option>'+mois.map(function(k){return '<option value="'+k+'">'+moisLabelCarb(k)+'</option>';}).join('');
+  if(cur&&vus[cur])sel.value=cur;
+}
+function renderCarbHist(){
+  var el=document.getElementById('carbHist');if(!el)return;
+  var ft=document.getElementById('carbFType').value,fm=document.getElementById('carbFMois').value;
+  var rows=_pleins.filter(function(r){return (!ft||(r.type||'Gasoil')===ft)&&(!fm||moisKeyCarb(r)===fm);});
+  el.innerHTML=rows.length?rows.map(function(r){return '<div class="glass hist-row"><div class="h1"><b>'+r.litres+' L</b><span class="dt">'+frDate(r)+'</span></div><div class="meta"><span class="carb-tag '+(r.type==='AdBlue'?'ad':'')+'">'+(r.type||'Gasoil')+'</span>'+(r.km?' · '+r.km+' km':'')+'</div></div>';}).join(''):'<div class="msg-empty">Aucun plein</div>';
+}
+async function openCarburant(){
   document.getElementById('carbVeh').textContent=S.vehicule.id;
   document.getElementById('carbType').value='Gasoil';
   document.getElementById('carbL').value='';document.getElementById('carbKm').value=curKm();
+  document.getElementById('carbFType').value='';document.getElementById('carbFMois').value='';
   go('carburant');
-  loadHist('chauffeurs_carburant','carbHist',r=>`<div class="glass hist-row">
-    <div class="h1"><b>${r.litres} L</b><span class="dt">${frDate(r)}</span></div>
-    <div class="meta"><span class="carb-tag ${r.type==='AdBlue'?'ad':''}">${r.type||'Gasoil'}</span>${r.km?' · '+r.km+' km':''}</div></div>`);
+  var el=document.getElementById('carbHist');el.innerHTML='<div class="msg-empty">Chargement…</div>';
+  try{
+    var snap=await db.collection('chauffeurs_carburant').where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(200).get();
+    _pleins=snap.docs.map(function(d){return d.data();});
+  }catch(e){console.warn('carburant',e);_pleins=[];el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return;}
+  remplirMoisCarb();
+  renderCarbHist();
 }
 async function saveCarburant(){
   const TYPE=document.getElementById('carbType').value||'Gasoil';
@@ -2333,8 +2648,11 @@ function openEntretien(){
   renderEntretien();
 }
 function entRow(r,withBtn){
+  const clos=r.statut&&r.statut!=='ouvert';
+  const dateTop=(clos&&r.clotureAt)?new Date(r.clotureAt).toLocaleDateString('fr-FR'):frDate(r);
   return `<div class="glass hist-row">
-    <div class="h1"><b><span class="htype">${r.type||''}</span>${r.km?r.km+' km':''}</b><span class="dt">${frDate(r)}</span></div>
+    <div class="h1"><b><span class="htype">${r.type||''}</span>${r.km?r.km+' km':''}</b><span class="dt">${dateTop}</span></div>
+    ${(clos&&r.clotureNom)?`<div class="meta">Réalisé par ${r.clotureNom}</div>`:''}
     ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}
     ${withBtn?`<button class="t-btn" style="margin-top:8px" onclick="clotureEntretien('${r.id}')">Clôturer</button>`:''}</div>`;
 }
@@ -2433,7 +2751,7 @@ function backToVehicule(){
 /* ===== PHOTOS — compression + upload Drive → URLs Firestore ===== */
 const PH={}; // bucket -> [{data,type}]
 function compressPhoto(file,maxW,q){
-  maxW=maxW||1200;q=q||0.7;
+  maxW=maxW||1024;q=q||0.55;
   return new Promise(res=>{
     const r=new FileReader();
     r.onload=e=>{const img=new Image();img.onload=()=>{
@@ -2445,7 +2763,7 @@ function compressPhoto(file,maxW,q){
     r.readAsDataURL(file);
   });
 }
-const PH_MAX={edl:3};
+const PH_MAX={edl:3,pp:3,tache:3};
 async function addPhotos(bucket,input,thumbsId){
   PH[bucket]=PH[bucket]||[];
   const max=PH_MAX[bucket]||6;
@@ -2484,6 +2802,37 @@ function openAno(site){
   const sel=document.getElementById('anoType');
   sel.innerHTML='<option value="">— Choisir —</option>'+ANO_TYPES.map(t=>`<option>${t}</option>`).join('');sel.value='';
   go('anomalies');
+  renderAnoHist();
+}
+function driveThumb(u, size){
+  const s = (u && typeof u==='object') ? (u.url||'') : (u||'');
+  if(!s) return '';
+  let id='', m;
+  if(m=s.match(/[?&]id=([\w-]{20,})/)) id=m[1];
+  else if(m=s.match(/\/d\/([\w-]{20,})/)) id=m[1];
+  else { const g=s.match(/[\w-]{25,}/); if(g) id=g[0]; }
+  return id ? ('https://drive.google.com/thumbnail?id='+id+'&sz=w'+(size||400)) : s;
+}
+function anoRow(r){
+  const ph=(r.photos||[]).filter(Boolean).map(u=>typeof u==='string'?u:(u&&u.url)||'').filter(Boolean);
+  const thumbs=ph.length?'<div class="ano-ph">'+ph.map(u=>`<img src="${driveThumb(u,300)}" loading="lazy" onclick="window.open('${driveThumb(u,1600)}','_blank')">`).join('')+'</div>':'';
+  return `<div class="glass hist-row">
+    <div class="h1"><b><span class="htype">${r.nature||'Anomalie'}</span>${r.site?(''+r.site).replace(/</g,'&lt;'):''}</b><span class="dt">${frDate(r)}</span></div>
+    ${r.description?`<div class="meta">${(''+r.description).replace(/</g,'&lt;')}</div>`:''}
+    <div class="meta">Signalé par ${r.chauffeurNom||'—'}</div>
+    ${thumbs}</div>`;
+}
+async function renderAnoHist(){
+  const box=document.getElementById('anoHist');
+  if(!box)return;
+  box.innerHTML='<div class="msg-empty">Chargement…</div>';
+  try{
+    const snap=await db.collection('chauffeurs_anomalies').where('vehicule','==',S.vehicule.id).get();
+    let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+    rows.sort((a,b)=>(b.at||0)-(a.at||0));
+    rows=rows.slice(0,25);
+    box.innerHTML=rows.length?rows.map(anoRow).join(''):'<div class="msg-empty">Aucune anomalie signalée</div>';
+  }catch(e){console.warn('ano hist',e);box.innerHTML='<div class="msg-empty">Lecture impossible</div>';}
 }
 async function saveAno(){
   const nature=document.getElementById('anoType').value;
@@ -2551,6 +2900,53 @@ function initSig(id){
 }
 function clearSig(){if(_sigCtx&&_sigEl){_sigCtx.clearRect(0,0,_sigEl.width,_sigEl.height);_sigDirty=false;}}
 let _edlMandatory=false;
+let _ppMandatory=false;
+function openPrisePoste(mandatory){
+  _ppMandatory=!!mandatory;
+  document.getElementById('ppVeh').textContent=S.vehicule.id;
+  document.getElementById('ppDetail').value='';
+  PH['pp']=[];renderThumbs('pp','ppThumbs');
+  document.getElementById('ppHome').style.display='';
+  document.getElementById('ppForm').style.display='none';
+  go('prise');
+}
+function ppShowForm(){
+  document.getElementById('ppHome').style.display='none';
+  document.getElementById('ppForm').style.display='';
+}
+function ppBack(){
+  document.getElementById('ppForm').style.display='none';
+  document.getElementById('ppHome').style.display='';
+}
+function ppFinish(){
+  markEdlDone();
+  if(_ppMandatory){_ppMandatory=false;openCharge(true);}
+  else enterHub();
+}
+async function ppRas(){
+  busy('Enregistrement…');
+  try{
+    await db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:'ras',probleme:false,detail:null,photos:[],at:Date.now()});
+    uiToast('Poste pris','ok');
+    ppFinish();
+  }catch(e){uiToast('Échec enregistrement','err');}
+  finally{busyDone();}
+}
+async function ppSaveProbleme(){
+  const det=(document.getElementById('ppDetail').value||'').trim();
+  const ph=PH['pp']||[];
+  if(!det&&!ph.length){uiToast('Décris le problème ou ajoute une photo','err');return;}
+  const ok=await uiConfirm('Signaler un problème',(det?det:'(sans détail)')+(ph.length?' · '+ph.length+' photo(s)':'')+' sur '+S.vehicule.id+' ?','Signaler');
+  if(!ok)return;
+  busy('Envoi du signalement…');
+  try{
+    const ref=await db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],at:Date.now()});
+    if(ph.length){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');const u=await uploadPhotos('prise_poste',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)await ref.update({photos:u});}
+    uiToast('Problème signalé','ok');
+    ppFinish();
+  }catch(e){uiToast('Échec envoi','err');}
+  finally{busyDone();}
+}
 function openEdl(mandatory){
   _edlMandatory=!!mandatory;
   document.getElementById('edlVeh').textContent=S.vehicule.id;
