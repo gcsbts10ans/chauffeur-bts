@@ -974,7 +974,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v40';
+const APP_VERSION='v41';
 const APPS_SCRIPT_URL=''; /* Apps Script chauffeurs (mail réforme + upload photo) — coller l'URL /exec après déploiement */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1648,14 +1648,20 @@ function setGeoLine(state,txt){
   el.innerHTML='<span class="geo-dot"></span>'+txt;
 }
 let _depotLL=null,_depotTried=false,_leftDepot=false,_finPrompted=false;
+let _wakeLock=null;
+async function acquireWakeLock(){
+  try{ if(('wakeLock' in navigator) && !_wakeLock){ _wakeLock=await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release',function(){_wakeLock=null;}); } }catch(e){ _wakeLock=null; }
+}
+function releaseWakeLock(){ try{ if(_wakeLock){ _wakeLock.release(); _wakeLock=null; } }catch(e){} }
 function startGeo(){
   if(!('geolocation' in navigator)){setGeoLine('off','Localisation indisponible');return;}
   if(_geoWatch!==null)return; // déjà actif
   if(!_depotTried){_depotTried=true;cGeocode(BTS_DEPOT).then(ll=>{if(ll)_depotLL=ll;});}
   setGeoLine('wait','Activation de la localisation…');
   _geoWatch=navigator.geolocation.watchPosition(onGeo,onGeoErr,{enableHighAccuracy:true,maximumAge:30000,timeout:25000});
+  acquireWakeLock(); // garde l'écran allumé pendant la tournée → le GPS ne se coupe pas en veille
 }
-function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWatch);_geoWatch=null;}}
+function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWatch);_geoWatch=null;}releaseWakeLock();}
 let _posRefreshing=false;
 function refreshPositionNow(){
   if(_posRefreshing||!S.chauffeur||_geoWatch===null||!('geolocation' in navigator))return;
@@ -1669,7 +1675,7 @@ function refreshPositionNow(){
     checkDepotReturn(lat,lng);
   },function(){_posRefreshing=false;},{enableHighAccuracy:true,timeout:10000,maximumAge:0});
 }
-document.addEventListener('visibilitychange',function(){ if(!document.hidden) refreshPositionNow(); });
+document.addEventListener('visibilitychange',function(){ if(!document.hidden){ refreshPositionNow(); if(_geoWatch!==null) acquireWakeLock(); } });
 /* ===== Autorisations / réarmement (GPS, son, caméra) ===== */
 function openPerms(){go('perms');refreshPerms();}
 function setPerm(id,state,txt){
