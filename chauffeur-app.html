@@ -223,6 +223,37 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .tile.soon .tile-ic svg{stroke:rgba(30,60,114,.35)}
 .tile .ndot{position:absolute;top:8px;right:14px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .soon-tag{position:absolute;bottom:6px;font-size:9px;font-weight:700;color:var(--sub);background:rgba(30,60,114,.07);padding:1px 6px;border-radius:6px}
+/* ===== Mon planning ===== */
+.plan-slider{display:flex;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin-top:13px;border-radius:18px}
+.plan-slider::-webkit-scrollbar{display:none}
+.plan-wk{min-width:100%;width:100%;flex-shrink:0;scroll-snap-align:start;background:var(--glass);border:1px solid var(--line);border-radius:18px}
+.plan-wk-h{background:var(--navy);color:#fff;padding:12px 15px;font-size:13px;font-weight:800;display:flex;justify-content:space-between;align-items:center;border-radius:18px 18px 0 0}
+.plan-day{display:flex;align-items:center;padding:11px 15px;border-bottom:1px solid #F0F3F8}
+.plan-day:last-child{border-bottom:none}
+.plan-dn{width:66px;flex-shrink:0}
+.plan-dn b{font-size:14px;font-weight:800;color:var(--ink);display:block}
+.plan-dn span{font-size:11px;color:var(--sub);font-weight:600}
+.plan-badge{font-size:13px;font-weight:800;padding:6px 12px;border-radius:9px;margin-left:auto}
+.pb-work{background:#EEF3FA;color:var(--navy);border-left:4px solid var(--navy)}
+.pb-rest{background:#F1F4F8;color:var(--sub)}
+.pb-off{background:#FEF3C7;color:#92600A;border-left:4px solid var(--amber)}
+.pb-sick{background:#FEE2E2;color:#991B1B;border-left:4px solid var(--red)}
+.plan-today{background:#F7FAFF}
+.plan-today .plan-dn b{color:var(--navy)}
+.plan-nav{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px}
+.plan-arrow{width:46px;height:46px;border-radius:13px;border:1px solid var(--line);background:var(--glass);display:flex;align-items:center;justify-content:center}
+.plan-arrow:active{background:#EEF3FA}
+.plan-arrow svg{width:22px;height:22px;stroke:var(--navy);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.plan-arrow.off{opacity:.35}
+.plan-dots{display:flex;gap:8px}
+.plan-dot{width:9px;height:9px;border-radius:50%;background:#C6D0DF}
+.plan-dot.on{background:var(--navy);width:24px;border-radius:5px}
+.plan-pick{background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:13px}
+.plan-pick h3{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.plan-pick p{font-size:12.5px;color:var(--sub);margin-bottom:12px}
+.plan-pick select{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink);margin-bottom:12px}
+.plan-pick button{width:100%;height:50px;border:none;border-radius:14px;background:var(--navy);color:#fff;font-size:15px;font-weight:800;font-family:inherit}
+.plan-msg{text-align:center;color:var(--sub);font-size:13px;padding:34px 16px;line-height:1.5}
 
 /* CODES */
 .code-row{padding:13px 15px;margin-bottom:9px;display:flex;align-items:center;gap:12px}
@@ -698,6 +729,16 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="ctrl-deroge">« Les véhicules transportant des déchets hospitaliers, du linge et des marchandises nécessaires au fonctionnement des établissements de santé publics ou privés et des établissements d'hébergement pour personnes âgées dépendantes ou de marchandises à caractère médical ou de protection sanitaire » ne sont pas concernés par l'interdiction de circuler les week-ends et jours fériés, conformément à l'article 4-I-9 de l'arrêté du 16 avril 2021.</div>
   </section>
 
+  <!-- MON PLANNING -->
+  <section class="screen" id="s-planning">
+    <div class="glass top">
+      <div class="icobtn back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+      <div><h1>Mon planning</h1><p id="planSub">&mdash;</p></div>
+      <div class="icobtn" onclick="planChangeName()" title="Changer de nom"><svg viewBox="0 0 24 24" fill="none"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></div>
+    </div>
+    <div id="planBody"></div>
+  </section>
+
   <!-- HUB -->
   <section class="screen" id="s-hub">
     <div class="glass top">
@@ -990,7 +1031,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v45';
+const APP_VERSION='v46';
 const APPS_SCRIPT_URL=''; /* Apps Script chauffeurs (mail réforme + upload photo) — coller l'URL /exec après déploiement */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1815,6 +1856,97 @@ function mapsRoute(stops,origin){
     (origin?'&origin='+encodeURIComponent(origin):'')+
     '&destination='+dest+(wp?'&waypoints='+wp:'');
 }
+// ---------- MON PLANNING (lecture planning_publie) ----------
+var PLAN_KEY='chf_plan_agent'; var _planWeeks=[]; var _planI=0;
+function isoMonday(d){var x=new Date(d);var day=(x.getDay()+6)%7;x.setHours(12,0,0,0);x.setDate(x.getDate()-day);return x.toISOString().slice(0,10);}
+function isoAdd(iso,n){var x=new Date(iso+'T12:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);}
+function frDate(iso){var p=iso.split('-');return p[2]+'/'+p[1];}
+var _JN=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+function planLabel(code){
+  if(!code)return {t:'Repos',c:'pb-rest'};
+  var s=String(code).trim(); var u=s.toUpperCase();
+  if(/^\d+(\/\d+)?$/.test(s))return {t:'Poste '+s,c:'pb-work'};
+  if(/^(M|ML|AAQ|AE|AT)$/.test(u))return {t:u,c:'pb-sick'};
+  if(u==='CP'||u==='CA'||/^(CP|CA|RT|MAT|RP|RK|RH)/.test(u))return {t:u,c:'pb-off'};
+  return {t:s,c:'pb-work'};
+}
+function openPlanning(){
+  go('planning');
+  var saved=null; try{saved=JSON.parse(localStorage.getItem(PLAN_KEY));}catch(e){}
+  if(!saved||!saved.id){ planPickName(); return; }
+  document.getElementById('planSub').textContent=saved.nom||'\u2014';
+  planLoad(saved.id);
+}
+function planChangeName(){ try{localStorage.removeItem(PLAN_KEY);}catch(e){} planPickName(); }
+async function planPickName(){
+  var body=document.getElementById('planBody');
+  document.getElementById('planSub').textContent='Choix du nom';
+  body.innerHTML='<div class="plan-msg">Chargement des agents\u2026</div>';
+  try{
+    var lundi=isoMonday(new Date()); var doc=null;
+    for(var k=0;k<5&&!doc;k++){ var s=await db.collection('planning_publie').doc(isoAdd(lundi,k*7)).get(); if(s.exists)doc=s.data(); }
+    if(!doc||!doc.agents){ body.innerHTML='<div class="plan-msg">Aucun planning publi\u00e9 pour le moment.</div>'; return; }
+    var ags=Object.keys(doc.agents).map(function(id){return {id:id,nom:doc.agents[id].nom||id};});
+    ags.sort(function(a,b){return a.nom.localeCompare(b.nom);});
+    var opt='<option value="">\u2014 Choisis ton nom \u2014</option>';
+    ags.forEach(function(a){ opt+='<option value="'+a.id+'">'+a.nom+'</option>'; });
+    body.innerHTML='<div class="plan-pick"><h3>Qui es-tu ?</h3><p>Choisis ton nom une fois, je m\u2019en souviendrai ensuite.</p><select id="planSel">'+opt+'</select><button onclick="planConfirmName()">Valider</button></div>';
+  }catch(e){ body.innerHTML='<div class="plan-msg">Erreur de chargement. R\u00e9essaie plus tard.</div>'; }
+}
+function planConfirmName(){
+  var sel=document.getElementById('planSel'); if(!sel||!sel.value){uiToast('Choisis ton nom','err');return;}
+  var nom=sel.options[sel.selectedIndex].text;
+  try{localStorage.setItem(PLAN_KEY,JSON.stringify({id:sel.value,nom:nom}));}catch(e){}
+  document.getElementById('planSub').textContent=nom;
+  planLoad(sel.value);
+}
+async function planLoad(agentId){
+  var body=document.getElementById('planBody');
+  body.innerHTML='<div class="plan-msg">Chargement de ton planning\u2026</div>';
+  try{
+    var lundi=isoMonday(new Date()); var proms=[];
+    for(var k=0;k<5;k++){ (function(l){ proms.push(db.collection('planning_publie').doc(l).get().then(function(s){return s.exists?{lundi:l,data:s.data()}:null;}).catch(function(){return null;})); })(isoAdd(lundi,k*7)); }
+    var res=await Promise.all(proms);
+    _planWeeks=[];
+    res.forEach(function(r){ if(r&&r.data&&r.data.agents&&r.data.agents[agentId])_planWeeks.push({lundi:r.lundi,jours:r.data.agents[agentId].jours||{}}); });
+    if(!_planWeeks.length){ body.innerHTML='<div class="plan-msg">Aucune semaine publi\u00e9e pour toi pour l\u2019instant.</div>'; return; }
+    renderPlanSlides();
+  }catch(e){ body.innerHTML='<div class="plan-msg">Erreur de chargement. R\u00e9essaie plus tard.</div>'; }
+}
+function renderPlanSlides(){
+  var today=new Date(); today.setHours(12,0,0,0); var todayIso=today.toISOString().slice(0,10);
+  var nowMon=isoMonday(new Date());
+  var sl='<div class="plan-slider" id="planSlider">';
+  for(var w=0;w<_planWeeks.length;w++){
+    var wk=_planWeeks[w]; var cur=(wk.lundi===nowMon);
+    sl+='<div class="plan-wk"><div class="plan-wk-h"><span>Sem. du '+frDate(wk.lundi)+'</span><span>'+(cur?'en cours':'&nbsp;')+'</span></div>';
+    for(var i=0;i<7;i++){
+      var iso=isoAdd(wk.lundi,i); var lab=planLabel(wk.jours[iso]);
+      var td=(iso===todayIso)?' plan-today':'';
+      sl+='<div class="plan-day'+td+'"><div class="plan-dn"><b>'+_JN[i]+'</b><span>'+frDate(iso)+'</span></div><span class="plan-badge '+lab.c+'">'+lab.t+'</span></div>';
+    }
+    sl+='</div>';
+  }
+  sl+='</div><div class="plan-nav"><button class="plan-arrow" id="planPrev" onclick="planMv(-1)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><div class="plan-dots" id="planDots"></div><button class="plan-arrow" id="planNext" onclick="planMv(1)"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>';
+  document.getElementById('planBody').innerHTML=sl;
+  var ci=0; for(var c=0;c<_planWeeks.length;c++){ if(_planWeeks[c].lundi===nowMon){ci=c;break;} }
+  _planI=ci;
+  var dh=''; for(var k2=0;k2<_planWeeks.length;k2++)dh+='<span class="plan-dot"></span>';
+  document.getElementById('planDots').innerHTML=dh;
+  var slider=document.getElementById('planSlider');
+  slider.addEventListener('scroll',function(){ var n=Math.round(slider.scrollLeft/slider.clientWidth); if(n!==_planI){_planI=n;planUpdNav();} });
+  if(ci>0){ setTimeout(function(){ slider.scrollLeft=slider.clientWidth*ci; planUpdNav(); },60); }
+  planUpdNav();
+}
+function planUpdNav(){
+  var d=document.querySelectorAll('#planDots .plan-dot');
+  for(var k=0;k<d.length;k++)d[k].className='plan-dot'+(k===_planI?' on':'');
+  var p=document.getElementById('planPrev'),n=document.getElementById('planNext');
+  if(p)p.className='plan-arrow'+(_planI===0?' off':'');
+  if(n)n.className='plan-arrow'+(_planI===_planWeeks.length-1?' off':'');
+}
+function planMv(dir){ var n=_planI+dir; if(n<0||n>_planWeeks.length-1)return; _planI=n; var s=document.getElementById('planSlider'); if(s.scrollTo){s.scrollTo({left:s.clientWidth*n,behavior:'smooth'});}else{s.scrollLeft=s.clientWidth*n;} planUpdNav(); }
+
 function openUrl(u){window.open(u,'_blank','noopener');}
 function routeTournee(num){
   const t=S.tournees.find(x=>x.numero===num);if(!t)return;
@@ -2232,7 +2364,6 @@ function renderHub(){
   document.getElementById('hubGrid').innerHTML=HUB.map(h=>{
     if(h.type==='direct'){
       const m=modOf(h.id);
-      if(h.id==='planning')return `<div class="glass tile soon">${appHtml(m,'solo')}<b>${h.label}</b><span class="soon-tag">Bientôt disponible</span></div>`;
       return `<div class="glass tile" onclick="tapDirect(this,'${h.id}')">${appHtml(m,'solo')}<b>${h.label}</b></div>`;
     }
     const badge=folderBadge(h.fid,unread,pend);
@@ -2278,7 +2409,7 @@ function openModule(id){
   if(id==='taches'){openTaches();return;}
   if(id==='controle'){openControle();return;}
   if(id==='arrete'){go('arrete');return;}
-  if(id==='planning'){if(PLANNING_URL)openUrl(PLANNING_URL);else uiToast('Lien planning à configurer','err');return;}
+  if(id==='planning'){openPlanning();return;}
   if(id==='carburant'){openCarburant();return;}
   if(id==='km'){openKm();return;}
   if(id==='entretien'){openEntretien();return;}
