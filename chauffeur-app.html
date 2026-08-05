@@ -1031,8 +1031,15 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-const APP_VERSION='v46';
-const APPS_SCRIPT_URL=''; /* Apps Script chauffeurs (mail réforme + upload photo) — coller l'URL /exec après déploiement */
+/* ──────────────────────────────────────────────────────────────────────────
+   Chauffeurs BTS — v47 (31/07/2026)
+   Contrôle écosystème : aucune fiche de poste utilisée, aucun reliquat Google
+   Sheets. L'Apps Script (PHOTO_API) sert au dépôt de photos sur Drive et reste
+   en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
+   Retrait d'une constante Apps Script vide et inutilisée.
+   ────────────────────────────────────────────────────────────────────────── */
+const APP_VERSION='v48';
+/* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
 db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
@@ -2705,13 +2712,27 @@ async function sendAlerte(){
 /* ======================= LOT 3 : VÉHICULE ======================= */
 function chNom(){return (S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||'');}
 function frDate(r){return r.at?new Date(r.at).toLocaleDateString('fr-FR'):(r.date||'');}
+// Historique conservé/affiché : 6 derniers mois
+var HIST_MOIS=6;
+function histCutoff(){return Date.now()-HIST_MOIS*30.44*24*3600*1000;}
+// Lecture SANS orderBy (évite l'index composite where+orderBy), tri fait ici.
+function histSort(docs,max){
+  var cut=histCutoff();
+  var rows=docs.map(function(d){return d.data();}).filter(function(r){
+    var t=r.at||0;
+    if(!t&&r.date){var p=String(r.date).split('-');if(p.length===3)t=new Date(p[0],p[1]-1,p[2]).getTime();}
+    return t>=cut;
+  });
+  rows.sort(function(a,b){return (b.at||0)-(a.at||0);});
+  return max?rows.slice(0,max):rows;
+}
 // lecture historique à la demande (1 fois à l'ouverture, ≤40 docs, filtré véhicule, pas d'index)
 async function loadHist(coll,elId,rowFn){
   const el=document.getElementById(elId);
   el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const snap=await db.collection(coll).where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(20).get();
-    const rows=snap.docs.map(d=>d.data());
+    const snap=await db.collection(coll).where('vehicule','==',S.vehicule.id).limit(300).get();
+    const rows=histSort(snap.docs,20);
     el.innerHTML=rows.length?rows.map(rowFn).join(''):'<div class="msg-empty">Aucun enregistrement</div>';
     return rows;
   }catch(e){console.warn(coll,e);el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return [];}
@@ -2744,8 +2765,8 @@ async function openCarburant(){
   go('carburant');
   var el=document.getElementById('carbHist');el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    var snap=await db.collection('chauffeurs_carburant').where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(200).get();
-    _pleins=snap.docs.map(function(d){return d.data();});
+    var snap=await db.collection('chauffeurs_carburant').where('vehicule','==',S.vehicule.id).limit(400).get();
+    _pleins=histSort(snap.docs,200);
   }catch(e){console.warn('carburant',e);_pleins=[];el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return;}
   remplirMoisCarb();
   renderCarbHist();
@@ -2775,8 +2796,8 @@ async function loadKmHist(){
   const el=document.getElementById('kmHist');
   el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const snap=await db.collection('chauffeurs_km').where('vehicule','==',S.vehicule.id).orderBy('at','desc').limit(20).get();
-    const rows=snap.docs.map(d=>d.data());
+    const snap=await db.collection('chauffeurs_km').where('vehicule','==',S.vehicule.id).limit(300).get();
+    const rows=histSort(snap.docs,20);
     el.innerHTML=rows.length?rows.map((r,i)=>{
       const prev=rows[i+1];const d=(prev&&r.km&&prev.km)?(r.km-prev.km):null;
       return `<div class="glass hist-row"><div class="h1"><b>${r.km} km</b><span class="dt">${frDate(r)}</span></div>
