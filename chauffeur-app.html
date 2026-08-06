@@ -1038,7 +1038,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v50';
+const APP_VERSION='v53';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1868,7 +1868,7 @@ function mapsRoute(stops,origin){
 var PLAN_KEY='chf_plan_agent'; var _planWeeks=[]; var _planI=0;
 function isoMonday(d){var x=new Date(d);var day=(x.getDay()+6)%7;x.setHours(12,0,0,0);x.setDate(x.getDate()-day);return x.toISOString().slice(0,10);}
 function isoAdd(iso,n){var x=new Date(iso+'T12:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);}
-function frDate(iso){var p=iso.split('-');return p[2]+'/'+p[1];}
+function planDate(iso){var p=String(iso).split('-');return p[2]+'/'+p[1];}
 var _JN=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 function planLabel(code){
   if(!code)return {t:'Repos',c:'pb-rest'};
@@ -1892,7 +1892,9 @@ async function planPickName(){
   body.innerHTML='<div class="plan-msg">Chargement des agents\u2026</div>';
   try{
     var lundi=isoMonday(new Date()); var doc=null;
-    for(var k=0;k<5&&!doc;k++){ var s=await db.collection('planning_publie').doc(isoAdd(lundi,k*7)).get(); if(s.exists)doc=s.data(); }
+    var ps=[]; for(var k=0;k<5;k++){ ps.push(db.collection('planning_publie').doc(isoAdd(lundi,k*7)).get().catch(function(){return null;})); }
+    var snaps=await Promise.all(ps);
+    for(var q=0;q<snaps.length&&!doc;q++){ if(snaps[q]&&snaps[q].exists)doc=snaps[q].data(); }
     if(!doc||!doc.agents){ body.innerHTML='<div class="plan-msg">Aucun planning publi\u00e9 pour le moment.</div>'; return; }
     var ags=Object.keys(doc.agents).map(function(id){return {id:id,nom:doc.agents[id].nom||id};});
     ags.sort(function(a,b){return a.nom.localeCompare(b.nom);});
@@ -1927,11 +1929,11 @@ function renderPlanSlides(){
   var sl='<div class="plan-slider" id="planSlider">';
   for(var w=0;w<_planWeeks.length;w++){
     var wk=_planWeeks[w]; var cur=(wk.lundi===nowMon);
-    sl+='<div class="plan-wk"><div class="plan-wk-h"><span>Sem. du '+frDate(wk.lundi)+'</span><span>'+(cur?'en cours':'&nbsp;')+'</span></div>';
+    sl+='<div class="plan-wk"><div class="plan-wk-h"><span>Sem. du '+planDate(wk.lundi)+'</span><span>'+(cur?'en cours':'&nbsp;')+'</span></div>';
     for(var i=0;i<7;i++){
       var iso=isoAdd(wk.lundi,i); var lab=planLabel(wk.jours[iso]);
       var td=(iso===todayIso)?' plan-today':'';
-      sl+='<div class="plan-day'+td+'"><div class="plan-dn"><b>'+_JN[i]+'</b><span>'+frDate(iso)+'</span></div><span class="plan-badge '+lab.c+'">'+lab.t+'</span></div>';
+      sl+='<div class="plan-day'+td+'"><div class="plan-dn"><b>'+_JN[i]+'</b><span>'+planDate(iso)+'</span></div><span class="plan-badge '+lab.c+'">'+lab.t+'</span></div>';
     }
     sl+='</div>';
   }
@@ -2721,20 +2723,38 @@ function histCutoff(){return Date.now()-HIST_MOIS*30.44*24*3600*1000;}
 // n'existe pas encore. Une fois les index créés, le repli ne sert plus.
 var _histNoIndex={};
 async function histQuery(coll,max){
+  if(!S.vehicule||!S.vehicule.id)return [];   // sécurité : aucun véhicule sélectionné
   var ref=db.collection(coll).where('vehicule','==',S.vehicule.id);
+  // 1) Version optimale si l'index composite (vehicule + at) existe : ~max lectures.
   if(!_histNoIndex[coll]){
     try{
       var s=await ref.orderBy('at','desc').limit(max).get();
       return histSort(s.docs,max);
     }catch(e){
       _histNoIndex[coll]=1;
-      // Message Firebase complet : il contient le lien direct de création de l'index.
-      console.warn('[INDEX MANQUANT] '+coll+' — repli tri local. Créez l\'index vehicule(asc)+at(desc). Lien ci-dessous :');
+      console.warn('[INDEX MANQUANT] '+coll+' — repli fenêtre 6 mois (fonctionne, un peu plus de lectures). Index conseillé vehicule(asc)+at(desc) :');
       console.warn(e&&e.message?e.message:e);
     }
   }
-  var s2=await ref.limit(500).get();
-  return histSort(s2.docs,max);
+  // 2) Repli SANS index composite : on trie par date (même champ que le filtre =
+  //    index simple automatique), donc l'ordre est TOUJOURS garanti, du plus
+  //    récent au plus ancien, borné aux 6 derniers mois. On pagine jusqu'à avoir
+  //    assez de fiches pour CE véhicule : aucun plafond ne peut masquer un relevé.
+  var cut=histCutoff(), rows=[], last=null, pages=0;
+  while(rows.length<max && pages<6){
+    var q=db.collection(coll).where('at','>=',cut).orderBy('at','desc').limit(250);
+    if(last)q=q.startAfter(last);
+    var snap=await q.get();
+    if(!snap.docs.length)break;
+    snap.docs.forEach(function(d){
+      var r=d.data();
+      if(r&&r.vehicule===S.vehicule.id&&rows.length<max)rows.push(r);
+    });
+    last=snap.docs[snap.docs.length-1];
+    if(snap.docs.length<250)break;
+    pages++;
+  }
+  return rows;
 }
 // Lecture SANS orderBy (évite l'index composite where+orderBy), tri fait ici.
 function histSort(docs,max){
@@ -2746,16 +2766,6 @@ function histSort(docs,max){
   });
   rows.sort(function(a,b){return (b.at||0)-(a.at||0);});
   return max?rows.slice(0,max):rows;
-}
-// lecture historique à la demande (1 fois à l'ouverture, ≤40 docs, filtré véhicule, pas d'index)
-async function loadHist(coll,elId,rowFn){
-  const el=document.getElementById(elId);
-  el.innerHTML='<div class="msg-empty">Chargement…</div>';
-  try{
-    const rows=await histQuery(coll,20);
-    el.innerHTML=rows.length?rows.map(rowFn).join(''):'<div class="msg-empty">Aucun enregistrement</div>';
-    return rows;
-  }catch(e){console.warn(coll,e);el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return [];}
 }
 
 /* --- Carburant --- */
@@ -2859,11 +2869,16 @@ async function renderEntretien(){
   const open=document.getElementById('entOpen'),hist=document.getElementById('entHist');
   open.innerHTML='<div class="msg-empty">Chargement…</div>';hist.innerHTML='';
   try{
-    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).get();
+    // Borné : on lit au plus 400 tickets du véhicule (collection à croissance lente).
+    // Les tickets OUVERTS restent affichés quel que soit leur âge (un entretien
+    // non clôturé ne doit jamais disparaître) ; l'historique clos est limité
+    // aux 6 derniers mois, comme les autres historiques chauffeur.
+    const snap=await db.collection('chauffeurs_entretien').where('vehicule','==',S.vehicule.id).limit(400).get();
     let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
     rows.sort((a,b)=>(b.at||0)-(a.at||0));
+    const cutEnt=histCutoff();
     const ouverts=rows.filter(r=>r.statut==='ouvert');
-    const clos=rows.filter(r=>r.statut!=='ouvert').slice(0,20);
+    const clos=rows.filter(r=>r.statut!=='ouvert'&&(r.clotureAt||r.at||0)>=cutEnt).slice(0,20);
     open.innerHTML=ouverts.length?ouverts.map(r=>entRow(r,true)).join(''):'<div class="msg-empty">Aucun ticket ouvert</div>';
     hist.innerHTML=clos.length?clos.map(r=>entRow(r,false)).join(''):'<div class="msg-empty">Aucun entretien clôturé</div>';
   }catch(e){console.warn('entretien',e);open.innerHTML='<div class="msg-empty">Lecture impossible</div>';hist.innerHTML='';}
@@ -3030,10 +3045,8 @@ async function renderAnoHist(){
   if(!box)return;
   box.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const snap=await db.collection('chauffeurs_anomalies').where('vehicule','==',S.vehicule.id).get();
-    let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-    rows.sort((a,b)=>(b.at||0)-(a.at||0));
-    rows=rows.slice(0,25);
+    // Borné comme les autres historiques : 6 derniers mois, 25 plus récentes.
+    const rows=await histQuery('chauffeurs_anomalies',25);
     box.innerHTML=rows.length?rows.map(anoRow).join(''):'<div class="msg-empty">Aucune anomalie signalée</div>';
   }catch(e){console.warn('ano hist',e);box.innerHTML='<div class="msg-empty">Lecture impossible</div>';}
 }
