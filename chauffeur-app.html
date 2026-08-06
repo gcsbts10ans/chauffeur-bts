@@ -1038,7 +1038,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v48';
+const APP_VERSION='v50';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1735,6 +1735,7 @@ function stopGeo(){if(_geoWatch!==null){navigator.geolocation.clearWatch(_geoWat
 let _posRefreshing=false;
 function refreshPositionNow(){
   if(_posRefreshing||!S.chauffeur||_geoWatch===null||!('geolocation' in navigator))return;
+  if(Date.now()-_geoLast.t<60000)return;  // position déjà fraîche (<60 s) : pas d'écriture inutile
   _posRefreshing=true;
   navigator.geolocation.getCurrentPosition(function(pos){
     _posRefreshing=false;
@@ -2715,6 +2716,26 @@ function frDate(r){return r.at?new Date(r.at).toLocaleDateString('fr-FR'):(r.dat
 // Historique conservé/affiché : 6 derniers mois
 var HIST_MOIS=6;
 function histCutoff(){return Date.now()-HIST_MOIS*30.44*24*3600*1000;}
+// Requête historique : tente la version indexée (orderBy serveur = peu de lectures),
+// et bascule automatiquement sur un repli trié en local si l'index composite
+// n'existe pas encore. Une fois les index créés, le repli ne sert plus.
+var _histNoIndex={};
+async function histQuery(coll,max){
+  var ref=db.collection(coll).where('vehicule','==',S.vehicule.id);
+  if(!_histNoIndex[coll]){
+    try{
+      var s=await ref.orderBy('at','desc').limit(max).get();
+      return histSort(s.docs,max);
+    }catch(e){
+      _histNoIndex[coll]=1;
+      // Message Firebase complet : il contient le lien direct de création de l'index.
+      console.warn('[INDEX MANQUANT] '+coll+' — repli tri local. Créez l\'index vehicule(asc)+at(desc). Lien ci-dessous :');
+      console.warn(e&&e.message?e.message:e);
+    }
+  }
+  var s2=await ref.limit(500).get();
+  return histSort(s2.docs,max);
+}
 // Lecture SANS orderBy (évite l'index composite where+orderBy), tri fait ici.
 function histSort(docs,max){
   var cut=histCutoff();
@@ -2731,8 +2752,7 @@ async function loadHist(coll,elId,rowFn){
   const el=document.getElementById(elId);
   el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const snap=await db.collection(coll).where('vehicule','==',S.vehicule.id).limit(300).get();
-    const rows=histSort(snap.docs,20);
+    const rows=await histQuery(coll,20);
     el.innerHTML=rows.length?rows.map(rowFn).join(''):'<div class="msg-empty">Aucun enregistrement</div>';
     return rows;
   }catch(e){console.warn(coll,e);el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return [];}
@@ -2765,8 +2785,7 @@ async function openCarburant(){
   go('carburant');
   var el=document.getElementById('carbHist');el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    var snap=await db.collection('chauffeurs_carburant').where('vehicule','==',S.vehicule.id).limit(400).get();
-    _pleins=histSort(snap.docs,200);
+    _pleins=await histQuery('chauffeurs_carburant',200);
   }catch(e){console.warn('carburant',e);_pleins=[];el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return;}
   remplirMoisCarb();
   renderCarbHist();
@@ -2796,8 +2815,7 @@ async function loadKmHist(){
   const el=document.getElementById('kmHist');
   el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const snap=await db.collection('chauffeurs_km').where('vehicule','==',S.vehicule.id).limit(300).get();
-    const rows=histSort(snap.docs,20);
+    const rows=await histQuery('chauffeurs_km',20);
     el.innerHTML=rows.length?rows.map((r,i)=>{
       const prev=rows[i+1];const d=(prev&&r.km&&prev.km)?(r.km-prev.km):null;
       return `<div class="glass hist-row"><div class="h1"><b>${r.km} km</b><span class="dt">${frDate(r)}</span></div>
