@@ -515,6 +515,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .metruck svg{width:26px;height:26px}
 .lp{font-size:13px}.lp b{color:var(--navy)}.lp .a{color:var(--sub);font-size:12px;margin-top:2px}
 /* checklist toggles (fin de journée) */
+.fin-ano{margin-top:12px;padding:11px 13px;border-radius:11px;background:#fff8ec;border:1px solid #fbe6c2;color:#8a5a08;font-size:12.5px;line-height:1.5}
+.fin-ano.ok{background:#e8f7ee;border-color:#cfeeda;color:#11803a;font-weight:600}
 .chk-row{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid rgba(30,60,114,.08)}
 .chk-row:last-child{border-bottom:none}
 .chk-row .lbl{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
@@ -870,6 +872,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="sec-title">Fin de journée — <span id="finVeh"></span></div>
     <div class="glass form-card">
       <div id="finChk"></div>
+      <div id="finAno"></div>
       <div class="sub-lbl" style="margin-top:14px">Tableau de bord (2 photos max)</div>
       <input type="file" id="finFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('fin',this,'finThumbs')">
       <button type="button" class="photo-btn" onclick="document.getElementById('finFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Photographier le tableau de bord</button>
@@ -3433,8 +3436,7 @@ const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
   {id:'caisse_ext', label:'Lavage extérieur',           quand:4},
   {id:'cabine',     label:'Nettoyage intérieur cabine'},
-  {id:'reforme',    label:'Réforme faite',              quand:4, tournee:'82'},
-  {id:'anomalies',  label:'Anomalies signalées'}
+  {id:'reforme',    label:'Réforme faite',              quand:4, tournee:'82'}
 ];
 // Points affiches aujourd'hui, selon le jour et les tournees du chauffeur.
 function finItems(){
@@ -3450,9 +3452,28 @@ function openFin(){
   document.getElementById('finVeh').textContent=S.vehicule.id;
   document.getElementById('finNote').value='';
   PH['fin']=[];renderThumbs('fin','finThumbs');
+  finAnomalies();
   document.getElementById('finChk').innerHTML=finItems().map(it=>`
     <div class="chk-row" data-id="${it.id}"><span class="lbl">${esc(it.label)}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
+}
+/* Rappel des anomalies REELLEMENT signalees dans la journee, en lieu et
+   place de l'ancienne case a cocher « Anomalies signalees ». Celle-ci
+   demandait au chauffeur d'affirmer qu'il avait signale, sans le verifier :
+   une case decochee ne distinguait pas « rien a signaler » d'un oubli.
+   Ici on affiche ce qui existe en base, ou une invitation a le faire. */
+async function finAnomalies(){
+  const box=document.getElementById('finAno');
+  if(!box)return;
+  box.innerHTML='';
+  try{
+    const q=await db.collection('chauffeurs_anomalies')
+      .where('chauffeur','==',S.chauffeur.id).where('date','==',TODAY).limit(20).get();
+    const n=q.size;
+    box.innerHTML = n
+      ? '<div class="fin-ano ok">'+n+' anomalie'+(n>1?'s':'')+' signal\u00e9e'+(n>1?'s':'')+' aujourd\u2019hui.</div>'
+      : '<div class="fin-ano">Aucune anomalie signal\u00e9e aujourd\u2019hui. Si tu as constat\u00e9 quelque chose, passe par <b>Signaler une anomalie</b> avant de cl\u00f4turer.</div>';
+  }catch(e){ box.innerHTML=''; }
 }
 async function saveFin(){
   // Cle = libelle du point, pour rester lisible dans le journal du responsable.
