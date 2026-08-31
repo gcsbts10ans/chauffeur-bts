@@ -1065,7 +1065,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v57';
+const APP_VERSION='v58';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1515,14 +1515,13 @@ function onVehSel(){
   var id=document.getElementById('vehSel').value;
   var d=document.getElementById('vehDetail');
   var zt=document.getElementById('vehTours');
-  // Camion normal : on affiche les deux selecteurs de tournee, pre-remplis
-  // avec les tournees habituelles du camion choisi.
+  // Camion normal : le chauffeur choisit lui-meme sa tournee, sans
+  // pre-remplissage. Les tournees habituelles du camion sont rappelees en dessous.
   if(id&&id!=='RELAIS'){
     var v=VEHICULES.find(function(x){return x.id===id;});
     var hab=(v&&v.tournees)||[];
-    zt.innerHTML='<div class="fld"><label>Tourn\u00e9e</label><div class="sel-wrap"><select id="tSel1" onchange="onTourSel()">'+optsTournees(hab[0]||'','\u2014 Choisir \u2014')+'</select></div></div>'
-      +'<div class="fld"><label>Deuxi\u00e8me tourn\u00e9e (si tu en fais deux)</label><div class="sel-wrap"><select id="tSel2" onchange="onTourSel()">'+optsTournees(hab[1]||'','\u2014 Aucune \u2014')+'</select></div></div>'
-      +'<div style="font-size:12.5px;color:var(--sub);line-height:1.5;margin:-4px 3px 12px">Les tourn\u00e9es habituelles de ce camion sont d\u00e9j\u00e0 remplies. Change-les si tu fais autre chose aujourd\u2019hui.</div>';
+    zt.innerHTML='<div class="fld"><label>Tourn\u00e9e du jour</label><div class="sel-wrap"><select id="tSel1" onchange="onTourSel()">'+optsTournees('','\u2014 Choisir ta tourn\u00e9e \u2014')+'</select></div></div>'
+      +(hab.length?'<div style="font-size:12.5px;color:var(--sub);line-height:1.5;margin:-4px 3px 12px">Ce camion fait habituellement '+hab.map(function(x){return tLabel(TOURNEES_REF[x])||('T'+x);}).join(' et ')+'.</div>':'');
   } else { zt.innerHTML=''; }
   if(id==='RELAIS'){
     var tours=[];VEHICULES.forEach(function(v){(v.tournees||[]).forEach(function(t){if(tours.indexOf(String(t))<0)tours.push(String(t));});});tours.sort();
@@ -1538,13 +1537,13 @@ function onVehSel(){
   onTourSel();
 }
 // Tournees retenues : la premiere, plus la seconde si elle est differente.
+/* Une seule tournee par journee. Le second selecteur a ete retire le
+   01/09/2026 : on ne sait pas a l'avance si le chauffeur en fera une autre,
+   et ce qui change en cours de journee c'est le camion, pas la tournee.
+   Le retour reste un tableau, le reste du code en attend un. */
 function tourneesChoisies(){
-  var a=document.getElementById('tSel1'), b=document.getElementById('tSel2');
-  if(!a)return [];
-  var out=[];
-  if(a.value)out.push(a.value);
-  if(b&&b.value&&b.value!==a.value)out.push(b.value);
-  return out;
+  var a=document.getElementById('tSel1');
+  return (a&&a.value)?[a.value]:[];
 }
 function onTourSel(){
   var id=document.getElementById('vehSel').value;
@@ -1556,7 +1555,7 @@ function onTourSel(){
   var hab=(v.tournees||[]).map(String);
   var pills=choisies.map(function(t){
     var inhab=hab.indexOf(String(t))<0;
-    return '<span class="pill'+(inhab?' warn':'')+'">T'+t+(inhab?' \u00b7 inhabituelle':'')+'</span>';
+    return '<span class="pill'+(inhab?' warn':'')+'">'+(tLabel(TOURNEES_REF[t])||('T'+t))+(inhab?' \u00b7 inhabituelle':'')+'</span>';
   }).join('')+(v.horaires?'<span class="pill h">'+v.horaires+'</span>':'');
   d.innerHTML='<div class="glass veh" style="margin-top:12px;cursor:default">'
     +'<div class="veh-ic"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>'
@@ -1653,8 +1652,12 @@ async function pickVehicule(id){
   // Aucune tournée aujourd'hui (week-end / jour sans arrêt) → on saute ces étapes et on va à l'accueil.
   const aDesArrets=S.tournees.some(t=>(t.arrets||[]).length>0);
   await syncVerrousJour(); // confronte les verrous locaux a la base avant d'imposer l'EDL
+  // Changement de camion : l'etat des lieux du NOUVEAU vehicule reste
+  // obligatoire, les verrous etant indexes par camion. Le chargement, lui,
+  // a ete transfere : on l'ouvre sans l'imposer, pour verification.
   if(!aDesArrets) enterHub();
   else if(!edlDoneToday()) openPrisePoste(true);
+  else if(_chargeTransfert) openCharge(false);
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
 }
@@ -1771,7 +1774,7 @@ async function scanStop(mode){
   if(mode==='qr')return openScanner();
   const ok=await uiConfirm('Validation manuelle',a.client+' — confirmer la dépose ?','Valider la dépose');
   if(!ok)return;
-  const r=await demandeRolls(a.client,rollsABord().propres,a.format);
+  const r=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
   if(!r)return;
   validateDepose(num,ordre,'manuel',a.client,r);
 }
@@ -1782,7 +1785,7 @@ async function validateDepose(num,ordre,mode,client,rolls){
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(docId).set({
       date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
       arrets:{[ordre]:{ok:true,mode,at:Date.now(),client:client||'',
-        rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0}}
+        rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll')}}
     },{merge:true}));
     uiToast(fbMsg(_r,'Dépose validée — '+(client||'')),'ok');
     go('jour'); // le listener onSnapshot rafraîchira la journée
@@ -1849,9 +1852,11 @@ function rollsPaint(){
   if(_rollsCtx.restants==null){ el.textContent=''; return; }
   var reste=_rollsCtx.restants-_rollsCtx.deposes;
   // Alerte simple : on ne peut pas deposer plus de propres qu'on en a a bord.
+  var _cab=(_rollsCtx.format==='cabri');
+  var _n=function(k){ return _cab ? ('cabri'+(k>1?'s':'')) : ('roll'+(k>1?'s':'')+' propre'+(k>1?'s':'')); };
   el.textContent=(reste<0)
-    ? 'Attention : plus de rolls propres à bord qu\u2019il n\u2019en reste ('+_rollsCtx.restants+').'
-    : 'Il restera '+reste+' roll'+(reste>1?'s':'')+' propre'+(reste>1?'s':'')+' à bord.';
+    ? 'Attention : plus de '+_n(2)+' à bord qu\u2019il n\u2019en reste ('+_rollsCtx.restants+').'
+    : 'Il restera '+reste+' '+_n(reste)+' à bord.';
   el.className='rolls-info'+(reste<0?' warn':'');
 }
 function rollsStep(champ,d){
@@ -1872,19 +1877,21 @@ function rollsABord(){
   // au retour a l'usine le camion est vide, un nouveau chargement repart de
   // zero. Sans cette borne, les deposes du premier tour seraient soustraits
   // du chargement du second.
+  var debC=0;
   var debut=CHARGE.debutAt||0;
   Object.keys(S.statuts||{}).forEach(function(k){
     var ar=(S.statuts[k]||{}).arrets||{};
     Object.keys(ar).forEach(function(o){
       var v=ar[o]||{};
       if((v.at||0)<debut)return;
-      dep+=(v.rollsDeposes||0);
+      if(v.format==='cabri') debC+=(v.rollsDeposes||0);
+      else                   dep +=(v.rollsDeposes||0);
       rec+=(v.rollsRecuperes||0);
     });
   });
   var propres=Math.max(0,(CHARGE.propres||0)-dep);
-  var cabris=CHARGE.cabris||0;
-  return {propres:propres,cabris:cabris,sales:rec,deposes:dep,
+  var cabris =Math.max(0,(CHARGE.cabris||0)-debC);
+  return {propres:propres,cabris:cabris,sales:rec,deposes:dep+debC,
           poids:propres*ROLL_KG + cabris*CABRI_KG + rec*ROLL_KG};
 }
 
@@ -2003,12 +2010,12 @@ async function onScanResult(raw){
     _scanBusy=true;closeScanner();
     const ok=await uiConfirm('Vérifie le site','Ce QR correspond à « '+a.client+' », pas à « '+S.curStop.a.client+' ». Valider quand même la dépose chez « '+a.client+' » ?','Valider');
     if(!ok){_scanBusy=false;return;}
-    const r1=await demandeRolls(a.client,rollsABord().propres,a.format);
+    const r1=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
     if(!r1){_scanBusy=false;return;}
     return validateDepose(num,a.ordre,'qr',a.client,r1);
   }
   _scanBusy=true;closeScanner();
-  const r2=await demandeRolls(a.client,rollsABord().propres,a.format);
+  const r2=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
   if(!r2){_scanBusy=false;return;}
   validateDepose(num,a.ordre,'qr',a.client,r2);
 }
@@ -2580,6 +2587,23 @@ async function openCharge(mandatory){
   document.getElementById('chargeBody').innerHTML='<div class="msg-empty">Chargement…</div>';
   try{const d=await db.collection('chauffeurs_chargement').doc(TODAY+'_'+S.vehicule.id).get();CHARGE=chargeFromDoc(d.exists&&d.data());}
   catch(e){CHARGE={propres:0,cabris:0,tour:1,debutAt:0,tours:[]};}
+  // Changement de camion : le linge suit. On reporte ce qui etait a bord
+  // et on conserve le numero de tour, la journee n'ayant pas recommence.
+  if(_chargeTransfert && _chargeTransfert.depuis === S.vehicule.id){
+    _chargeTransfert=null;   // meme camion : rien a transferer
+  }
+  if(_chargeTransfert){
+    CHARGE.propres=_chargeTransfert.propres;
+    CHARGE.cabris =_chargeTransfert.cabris;
+    CHARGE.tour   =_chargeTransfert.tour;
+    CHARGE.debutAt=_chargeTransfert.debutAt;
+    CHARGE.tours  =_chargeTransfert.tours.length?_chargeTransfert.tours
+                   :[{n:CHARGE.tour,propres:CHARGE.propres,cabris:CHARGE.cabris,debutAt:CHARGE.debutAt}];
+    const _de=_chargeTransfert.depuis;
+    _chargeTransfert=null;
+    saveCharge();
+    uiToast('Chargement report\u00e9 depuis '+_de,'ok');
+  }
   renderCharge();
 }
 function renderCharge(){
@@ -3408,7 +3432,7 @@ async function saveEntretien(){
 const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
   {id:'caisse_ext', label:'Lavage extérieur',           quand:4},
-  {id:'cabine',     label:'Nettoyage intérieur cabine', quand:5},
+  {id:'cabine',     label:'Nettoyage intérieur cabine'},
   {id:'reforme',    label:'Réforme faite',              quand:4, tournee:'82'},
   {id:'anomalies',  label:'Anomalies signalées'}
 ];
@@ -3494,9 +3518,22 @@ async function finishDay(){
   }
   go('end');
 }
+/* Changement de camion en cours de journee — panne, relais, echange.
+   La TOURNEE continue : les arrets valides sont ranges sous la tournee et
+   non sous le camion, ils restent donc acquis.
+   Le CHARGEMENT, lui, est indexe par camion (TODAY_{vehicule}) : sans
+   transfert le chauffeur repartirait a zero alors que son linge le suit. */
+let _chargeTransfert=null;
 async function askChangeVehicule(){
-  const ok=await uiConfirm('Changer de camion','Tu vas quitter ta tournée en cours. Le contrôle du nouveau camion sera redemandé.','Changer');
-  if(ok)backToVehicule();
+  const ok=await uiConfirm('Changer de camion',
+    'Ta tourn\u00e9e continue : les arr\u00eats d\u00e9j\u00e0 valid\u00e9s restent acquis, et ton chargement est report\u00e9 sur le nouveau camion.',
+    'Changer');
+  if(!ok)return;
+  const ab=rollsABord();
+  _chargeTransfert={ propres:ab.propres, cabris:ab.cabris,
+                     tour:(CHARGE.tour||1), debutAt:(CHARGE.debutAt||Date.now()),
+                     tours:(CHARGE.tours||[]).slice(), depuis:(S.vehicule?S.vehicule.id:'') };
+  backToVehicule();
 }
 function backToVehicule(){
   _entRows=null;_entVeh=null; // cache entretien lie au camion : on le vide
