@@ -1498,7 +1498,7 @@ function toutesTournees(){
 function optsTournees(sel,vide){
   return '<option value="">'+vide+'</option>'+toutesTournees().map(function(t){
     var _t=TOURNEES_REF[t];
-    return '<option value="'+t+'"'+(String(sel)===t?' selected':'')+'>'+(_t?tLabel(_t):('T'+t))+'</option>';
+    return '<option value="'+t+'"'+(String(sel)===t?' selected':'')+'>'+(_t?tLabel(_t):(/^T/i.test(String(t))?String(t):('T'+t)))+'</option>';
   }).join('');
 }
 function renderVehicules(){
@@ -1590,7 +1590,7 @@ async function pickVehicule(id){
   S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('jourVeh').textContent=S.vehicule.id;
-  document.getElementById('jourSub').textContent='Ma journée · '+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||('T'+t)).join(' puis ');
+  document.getElementById('jourSub').textContent='Ma journée · '+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t))).join(' puis ');
   go('load');document.getElementById('loadTxt').textContent='Chargement de la tournée…';
 
   // Tournées retenues : servies depuis TOURNEES_REF (chargé au démarrage).
@@ -2774,7 +2774,7 @@ function folderBadge(fid,unread){if(fid==='msg')return unread+alertesNew();retur
 function renderHub(){
   document.getElementById('hubAva').textContent=(S.chauffeur.prenom||ini(S.chauffeur.nom,S.chauffeur.prenom));
   document.getElementById('hubName').textContent=S.vehicule.id;
-  document.getElementById('hubVeh').textContent=(S.vehicule.type?S.vehicule.type+' · ':'')+(S.vehicule.tournees||[]).map(t=>'T'+t).join(' + ');
+  document.getElementById('hubVeh').textContent=(S.vehicule.type?S.vehicule.type+' · ':'')+(S.vehicule.tournees||[]).map(t=>/^T/i.test(String(t))?String(t):('T'+t)).join(' + ');
   let total=0,done=0,next='';
   S.tournees.forEach(t=>(t.arrets||[]).slice().sort(bySeq).forEach(a=>{total++;const s=statutArret(t.tid,a.ordre);if(s&&s.ok)done++;else if(!next)next=a.client;}));
   const pct=total?Math.round(done/total*100):0;
