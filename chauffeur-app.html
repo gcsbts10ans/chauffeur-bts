@@ -1544,6 +1544,12 @@ function onVehSel(){
    01/09/2026 : on ne sait pas a l'avance si le chauffeur en fera une autre,
    et ce qui change en cours de journee c'est le camion, pas la tournee.
    Le retour reste un tableau, le reste du code en attend un. */
+/* Tournee du jour, telle que choisie par le chauffeur au demarrage. Elle
+   accompagne chaque signalement : le camion ne la porte plus. */
+function tourneeJour(){
+  var t=(S.tournees&&S.tournees[0])?S.tournees[0]:null;
+  return t?String(t.tid||t.numero||''):'';
+}
 function tourneesChoisies(){
   var a=document.getElementById('tSel1');
   return (a&&a.value)?[a.value]:[];
@@ -3211,6 +3217,7 @@ async function sendAlerte(){
   if(!ok)return;
   try{
     var _r=await fbWrite(db.collection('chauffeurs_alertes').add({
+      tournee:tourneeJour(),
       from:S.chauffeur.id, fromName:(S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||''),
       vehicule:S.vehicule.id, type:type, message:txt, at:Date.now(), lu:false
     }));
@@ -3308,11 +3315,11 @@ async function saveCarburant(){
   const ok=await uiConfirm('Enregistrer le plein',TYPE+' · '+L+' L'+' sur '+S.vehicule.id+' ?','Enregistrer');
   if(!ok)return;
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_carburant').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_carburant').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()}));
     setCurKm(KM);
     // Insertion locale : relire les 200 derniers pleins apres chaque saisie
     // coutait 200 lectures pour une ligne qu'on connait deja.
-    _pleins.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()});
+    _pleins.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()});
     document.getElementById('carbL').value='';
     document.getElementById('carbKm').value=curKm();
     remplirMoisCarb();renderCarbHist();
@@ -3345,7 +3352,7 @@ async function saveKm(){
   const ok=await uiConfirm('Enregistrer le relevé',KM+' km sur '+S.vehicule.id+' ?','Enregistrer');
   if(!ok)return;
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_km').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,km:KM,at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_km').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,km:KM,at:Date.now()}));
     setCurKm(KM);
     document.getElementById('kmVal').value=curKm();
     uiToast(fbMsg(_r,'Relevé enregistré'),'ok');
@@ -3414,9 +3421,9 @@ async function saveEntretien(){
   const ok=await uiConfirm('Demande d\'intervention',type+(KM?' · '+KM+' km':'')+' sur '+S.vehicule.id+' ?','Envoyer');
   if(!ok)return;
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()}));
     setCurKm(KM);
-    if(_entRows&&_entVeh===S.vehicule.id)_entRows.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()});
+    if(_entRows&&_entVeh===S.vehicule.id)_entRows.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()});
     document.getElementById('entNote').value='';
     document.getElementById('entType').value='';
     document.getElementById('entKm').value=curKm();
@@ -3497,7 +3504,7 @@ async function saveFin(){
     const _t1=(S.tournees&&S.tournees[0])?String(S.tournees[0].tid):'';
     const ph=PH['fin']||[];
     const ref=db.collection('chauffeurs_checklist_fin').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
     // Photos envoyees seulement si l'enregistrement est bien parti : hors
     // reseau, on ne bloque pas la cloture pour autant.
     if(ph.length&&_r==='ok'){
@@ -3667,7 +3674,7 @@ async function saveAno(){
   busy(photos.length?'Envoi de l\'anomalie…':'Envoi de l\'anomalie…');
   try{
     const ref=db.collection('chauffeurs_anomalies').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()}));
     let urls=[];
     if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos);if(urls.length)await fbWrite(ref.update({photos:urls}));}
     uiToast(!photos.length?fbMsg(_r,'Anomalie signalée'):(urls.length?'Anomalie + photos envoyées':fbMsg(_r,'Anomalie envoyée (photos non transmises)')),(!photos.length||urls.length)?'ok':'err');
@@ -3696,7 +3703,7 @@ async function saveRap(){
   busy('Envoi du rapport…');
   try{
     const ref=db.collection('chauffeurs_rapports').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
     let urls=[];
     if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('rapports',ref.id,photos);if(urls.length)await fbWrite(ref.update({photos:urls}));}
     if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');const su=await uploadPhotos('rapports',ref.id,[{data:sig,type:'signature'}]);if(su.length)await fbWrite(ref.update({signature:su[0].url}));}catch(e){}}
@@ -3751,7 +3758,7 @@ function ppFinish(){
 async function ppRas(){
   busy('Enregistrement…');
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:'ras',probleme:false,detail:null,photos:[],at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),tournee:tourneeJour(),date:TODAY,type:'ras',probleme:false,detail:null,photos:[],at:Date.now()}));
     uiToast(fbMsg(_r,'Poste pris'),'ok');
     ppFinish();
   }catch(e){uiToast('Échec enregistrement','err');}
@@ -3766,7 +3773,7 @@ async function ppSaveProbleme(){
   busy('Envoi du signalement…');
   try{
     const ref=db.collection('chauffeurs_prise_poste').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],at:Date.now()}));
     if(ph.length&&_r==='ok'){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');const u=await uploadPhotos('prise_poste',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)await fbWrite(ref.update({photos:u}));}
     uiToast(fbMsg(_r,'Problème signalé'),'ok');
     ppFinish();
@@ -3792,7 +3799,7 @@ async function saveEdl(){
   busy('Envoi de la déclaration…');
   try{
     const ref=db.collection('chauffeurs_edl').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:rem,photos:[],signature:null,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],signature:null,at:Date.now()}));
     const patch={};
     if(ph.length&&_r==='ok'){busy('Envoi des photos…');const u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)patch.photos=u;}
     if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
@@ -3809,7 +3816,7 @@ async function saveNoDamage(){
   if(!ok)return;
   busy('Enregistrement…');
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()}));
     markEdlDone();
     uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
     _edlMandatory=false;openCharge(true);
