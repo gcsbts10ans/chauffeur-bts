@@ -1690,7 +1690,11 @@ async function syncVerrousJour(){
 function edlKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
 function edlDoneToday(){ try{return localStorage.getItem(edlKey())==='1';}catch(e){return false;} }
 function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
-function chargeKey(){ return 'charge_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
+/* Identifiant du document de chargement : date + camion + chauffeur.
+   Sans le chauffeur, un collegue reprenant le camion dans la journee
+   heritait de son numero de tour et de son total. */
+function chargeDocId(){ return TODAY+'_'+(S.vehicule?S.vehicule.id:'')+'_'+(S.chauffeur?S.chauffeur.id:''); }
+function chargeKey(){ return 'charge_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:'')+'_'+(S.chauffeur?S.chauffeur.id:''); }
 function chargeDoneToday(){ try{return localStorage.getItem(chargeKey())==='1';}catch(e){return false;} }
 function markChargeDone(){ try{localStorage.setItem(chargeKey(),'1');}catch(e){} }
 function finKey(){ return 'fin_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
@@ -2588,7 +2592,7 @@ async function openCharge(mandatory){
   go('charge');
   const bk=document.getElementById('chargeBack');if(bk)bk.style.display=_chargeMandatory?'none':'';
   document.getElementById('chargeBody').innerHTML='<div class="msg-empty">Chargement…</div>';
-  try{const d=await db.collection('chauffeurs_chargement').doc(TODAY+'_'+S.vehicule.id).get();CHARGE=chargeFromDoc(d.exists&&d.data());}
+  try{const d=await db.collection('chauffeurs_chargement').doc(chargeDocId()).get();CHARGE=chargeFromDoc(d.exists&&d.data());}
   catch(e){CHARGE={propres:0,cabris:0,tour:1,debutAt:0,tours:[]};}
   // Changement de camion : le linge suit. On reporte ce qui etait a bord
   // et on conserve le numero de tour, la journee n'ayant pas recommence.
@@ -2718,7 +2722,7 @@ async function saveCharge(){
   if(!Array.isArray(CHARGE.tours)||!CHARGE.tours.length)CHARGE.tours=[{n:1,propres:0,debutAt:CHARGE.debutAt}];
   const _i=CHARGE.tours.length-1;
   CHARGE.tours[_i]={n:CHARGE.tour||1,propres:CHARGE.propres||0,cabris:CHARGE.cabris||0,debutAt:CHARGE.debutAt};
-  try{await fbWrite(db.collection('chauffeurs_chargement').doc(TODAY+'_'+S.vehicule.id).set({date:TODAY,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),tours:CHARGE.tours,tourCourant:CHARGE.tour||1,totalPropres:chargeTotalJour(),rollsPropres:CHARGE.propres||0,cabris:CHARGE.cabris||0,rolls:(CHARGE.propres||0)+(CHARGE.cabris||0),poids:chargePoids(),at:Date.now()},{merge:true}));}
+  try{await fbWrite(db.collection('chauffeurs_chargement').doc(chargeDocId()).set({date:TODAY,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),tours:CHARGE.tours,tourCourant:CHARGE.tour||1,totalPropres:chargeTotalJour(),rollsPropres:CHARGE.propres||0,cabris:CHARGE.cabris||0,rolls:(CHARGE.propres||0)+(CHARGE.cabris||0),poids:chargePoids(),at:Date.now()},{merge:true}));}
   catch(e){console.warn('charge',e);}
 }
 
@@ -2726,7 +2730,7 @@ async function saveCharge(){
 function openControle(){
   go('controle');
   document.getElementById('controleBody').innerHTML='<div class="msg-empty">…</div>';
-  db.collection('chauffeurs_chargement').doc(TODAY+'_'+S.vehicule.id).get()
+  db.collection('chauffeurs_chargement').doc(chargeDocId()).get()
     .then(d=>{if(d.exists)CHARGE=chargeFromDoc(d.data());renderControle();})
     .catch(()=>renderControle());
 }
