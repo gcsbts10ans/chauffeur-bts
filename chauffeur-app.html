@@ -420,6 +420,10 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .save-btn{width:100%;border:none;border-radius:16px;padding:15px;font-size:16px;font-weight:800;color:#fff;
   background:linear-gradient(135deg,var(--navy),var(--navy2));box-shadow:0 10px 24px rgba(30,60,114,.3);transition:transform .12s;margin-top:4px}
 .save-btn:active{transform:scale(.97)}
+.ghost-btn{width:100%;border:1.5px solid var(--navy);border-radius:16px;padding:14px;
+  font-size:15px;font-weight:700;color:var(--navy);background:transparent;
+  font-family:inherit;transition:transform .12s,background .12s}
+.ghost-btn:active{transform:scale(.97);background:rgba(30,60,114,.06)}
 .save-btn:disabled{opacity:.45;box-shadow:none;transform:none}
 .hist-row{padding:13px 15px;margin-bottom:9px}
 .hist-row .h1{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
@@ -975,6 +979,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <h2 style="color:var(--navy);margin-top:16px">Journée clôturée</h2>
       <p style="color:var(--sub);font-size:14px;max-width:260px;line-height:1.5">Merci, ta journée est bien enregistrée. Bonne route&nbsp;!</p>
       <button class="save-btn" style="margin-top:20px;max-width:240px" onclick="backToVehicule()">Nouvelle tournée</button>
+      <button class="ghost-btn" style="margin-top:10px;max-width:240px" onclick="finirJournee()">J'ai terminé</button>
     </div>
   </section>
 
@@ -3073,6 +3078,16 @@ function showMsgPill(n){
 }
 function hideMsgPill(){clearTimeout(_pillT);const el=document.getElementById('msgPill');if(el)el.classList.remove('on');}
 function openMsgPill(){hideMsgPill();openMessages();}
+/* Fin de service : le chauffeur rend la main et revient a l'ecran de
+   connexion. La deconnexion coupe le suivi GPS et la veille. */
+async function finirJournee(){
+  const ok=await uiConfirm('Terminer',
+    'Tu vas revenir \u00e0 l\u2019\u00e9cran de connexion. Ta journ\u00e9e est enregistr\u00e9e, la localisation est arr\u00eat\u00e9e.',
+    'J\u2019ai termin\u00e9');
+  if(!ok)return;
+  try{ arreterVeilleGeo(); }catch(e){}
+  goLogin();
+}
 function goLogin(){
   detachMessages();detachAlertes();
   if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
