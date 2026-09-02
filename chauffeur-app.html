@@ -1073,7 +1073,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v59';
+const APP_VERSION='v60';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -3522,8 +3522,7 @@ async function saveEntretien(){
 const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
   {id:'caisse_ext', label:'Lavage extérieur',           quand:4},
-  {id:'cabine',     label:'Nettoyage intérieur cabine'},
-  {id:'reforme',    label:'Réforme faite',              quand:4, tournee:'82'}
+  {id:'cabine',     label:'Nettoyage intérieur cabine'}
 ];
 // Points affiches aujourd'hui, selon le jour et les tournees du chauffeur.
 function finItems(){
