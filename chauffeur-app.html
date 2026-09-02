@@ -1068,7 +1068,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v58';
+const APP_VERSION='v59';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1670,7 +1670,13 @@ async function pickVehicule(id){
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
 }
-function enterHub(){ go('hub'); startGeo(); }
+/* Le suivi GPS ne demarre PLUS a l'arrivee sur l'accueil : le chauffeur qui
+   consultait son planning ou ses messages depuis chez lui etait localise
+   (constate par John Clerge le 01/09/2026). Il demarre a la validation du
+   chargement, quand le chauffeur part reellement en tournee, et s'arrete a
+   la cloture. Si l'application est rouverte apres un chargement deja valide
+   et avant la cloture, le suivi reprend. */
+function enterHub(){ go('hub'); if(chargeDoneToday() && !finDoneToday()){ startGeo(); demarrerVeilleGeo(); } }
 /* ------------------------------------------------------------------
    Les verrous du jour (EDL fait, cloture faite) etaient uniquement en
    localStorage : cache vide, nouveau telephone ou navigation privee et
@@ -2168,6 +2174,57 @@ function onGeoErr(e){
     if(_geoTries>0)uiToast('Autorisez la position dans les réglages du téléphone','err');
   }
 }
+/* ==========================================================================
+   LOCALISATION OBLIGATOIRE AU DEPART
+   Le camion est professionnel et la tournee se suit : le depart est refuse
+   tant que la position n'est pas accordee. Le navigateur ne permet pas de
+   forcer l'autorisation — on peut seulement refuser de partir sans elle.
+   ========================================================================== */
+function exigerGeo(){
+  return new Promise(function(resolve){
+    if(!('geolocation' in navigator)){
+      uiAlert('Localisation indisponible','Ce t\u00e9l\u00e9phone ne g\u00e8re pas la localisation. Pr\u00e9viens le responsable.');
+      resolve(false); return;
+    }
+    busy('V\u00e9rification de la localisation\u2026');
+    navigator.geolocation.getCurrentPosition(
+      function(){
+        busyDone();
+        uiToast('Localisation activ\u00e9e pour la tourn\u00e9e','ok');
+        setTimeout(function(){
+          uiAlert('Localisation active',
+            'Votre position est transmise au responsable pendant votre tourn\u00e9e, tant que vous \u00eates avec le camion. '
+            + 'Elle s\u2019arr\u00eate d\u00e8s que vous cl\u00f4turez votre journ\u00e9e \u2014 seule la derni\u00e8re position est conserv\u00e9e.');
+        }, 400);
+        resolve(true);
+      },
+      function(err){
+        busyDone();
+        var refus = err && err.code === 1;
+        uiAlert(refus?'Localisation refus\u00e9e':'Localisation indisponible',
+          refus
+            ? 'La tourn\u00e9e ne peut pas d\u00e9marrer sans localisation. Autorise-la dans les r\u00e9glages du t\u00e9l\u00e9phone, puis valide \u00e0 nouveau ton chargement.'
+            : 'Le signal GPS n\u2019est pas disponible. Place-toi \u00e0 l\u2019ext\u00e9rieur ou pr\u00e8s d\u2019une fen\u00eatre, puis valide \u00e0 nouveau ton chargement.');
+        resolve(false);
+      },
+      {enableHighAccuracy:true, timeout:20000, maximumAge:0});
+  });
+}
+/* Veille : le navigateur suspend le GPS quand le telephone se met en veille,
+   et l'autorisation peut etre retiree en cours de tournee. On surveille l'age
+   de la derniere position et on relance sans rien demander au chauffeur. */
+var _veilleGeo=null;
+function demarrerVeilleGeo(){
+  if(_veilleGeo)return;
+  _veilleGeo=setInterval(function(){
+    if(finDoneToday()){ arreterVeilleGeo(); return; }
+    if(Date.now()-(_geoLast.t||0) > 5*60000){
+      setGeoLine('wait','Localisation perdue \u2014 relance\u2026');
+      try{ stopGeo(); startGeo(); }catch(e){}
+    }
+  },120000);
+}
+function arreterVeilleGeo(){ if(_veilleGeo){ clearInterval(_veilleGeo); _veilleGeo=null; } }
 function retryGeo(){
   _geoTries++;
   setGeoLine('wait','Activation de la localisation…');
@@ -2644,7 +2701,7 @@ function renderCharge(){
       ${chargeAlerte(np+nc,poids)}
       <div class="chg-note" style="border:none;padding-top:0">Le linge sale se compte chez chaque client, au moment de valider l'arrêt.</div>
       <div class="chg-note">Estimation : 1 roll ≈ ${ROLL_KG} kg, 1 cabri ≈ ${CABRI_KG} kg. Ce n'est pas un pesage certifié — le poids légal réel se mesure au pont-bascule.</div>
-      ${_chargeMandatory?'<div class="chg-note" style="margin-top:12px">Pendant la tournée, votre position est transmise au responsable. Suivi limité au temps de travail, seule la dernière position est conservée, et elle est effacée à la clôture.</div>':''}
+      ${_chargeMandatory?'<div class="chg-note" style="margin-top:12px">La localisation démarre au départ en tournée, après validation du chargement, et s’arrête à la clôture. Avant et après, vous n’êtes pas localisé. Seule la dernière position est conservée, effacée à la clôture.</div>':''}
       ${_chargeMandatory?'<button class="save-btn" style="margin-top:12px" onclick="confirmCharge()">Démarrer la tournée</button>':''}
       ${(!_chargeMandatory&&dejaFait)?`<button class="save-btn" style="margin-top:14px;background:#0f766e" onclick="nouveauTour()">Je repars pour un tour</button>
       <div class="chg-note" style="border:none;padding-top:6px">À utiliser au retour à l\'usine, une fois le camion vidé. Le comptage repart à zéro pour le tour suivant.</div>`:''}
@@ -2708,6 +2765,10 @@ async function confirmCharge(){
   markChargeDone();
   uiToast('Fiche de contrôle mise à jour','ok');
   _chargeMandatory=false;
+  const _geoOk = await exigerGeo();
+  if(!_geoOk) return;            // pas de depart sans localisation
+  startGeo();
+  demarrerVeilleGeo();
   enterHub();
 }
 function changeRolls(type,d){
@@ -3519,7 +3580,7 @@ async function saveFin(){
     }
     PH['fin']=[];
     markFinDone();
-    try{stopGeo();}catch(e){}
+    try{stopGeo();arreterVeilleGeo();}catch(e){}
     try{
       await db.collection('chauffeurs_positions').doc(S.chauffeur.id).set({
         chauffeur:S.chauffeur.id, chauffeurNom:chNom(),
