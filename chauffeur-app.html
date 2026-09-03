@@ -1073,7 +1073,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v60';
+const APP_VERSION='v63';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1569,7 +1569,7 @@ function onTourSel(){
   var hab=(v.tournees||[]).map(String);
   var pills=choisies.map(function(t){
     var inhab=hab.indexOf(String(t))<0;
-    return '<span class="pill'+(inhab?' warn':'')+'">'+(tLabel(TOURNEES_REF[t])||('T'+t))+(inhab?' \u00b7 inhabituelle':'')+'</span>';
+    return '<span class="pill'+(inhab?' warn':'')+'">'+(tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t)))+(inhab?' \u00b7 inhabituelle':'')+'</span>';
   }).join('')+(v.horaires?'<span class="pill h">'+v.horaires+'</span>':'');
   d.innerHTML='<div class="glass veh" style="margin-top:12px;cursor:default">'
     +'<div class="veh-ic"><svg viewBox="0 0 24 24"><path d="M3 13h13l3 0V8a1 1 0 0 0-1-1h-4l-2-3H4a1 1 0 0 0-1 1z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></div>'
@@ -2865,9 +2865,9 @@ const MODULES=[
 ];
 const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
- {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','charge','edl','controle','arrete']},
+ {type:'direct',id:'charge',label:'Chargement'},
+ {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','rapport','controle','arrete']},
  {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes']},
- {type:'direct',id:'rapport',label:'Rapport circonstancié'},
  {type:'direct',id:'fin',label:'Fin de journée'},
  {type:'direct',id:'planning',label:'Mon planning'}
 ];
