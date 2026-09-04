@@ -1073,7 +1073,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v64';
+const APP_VERSION='v67';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1156,7 +1156,7 @@ if('serviceWorker' in navigator){
   }).catch(function(){});
 }
 window.addEventListener('beforeunload',function(e){
-  try{ if(S&&S.chauffeur&&S.vehicule&&edlDoneToday()&&!finDoneToday()){ e.preventDefault(); e.returnValue=''; } }catch(_){}
+  try{ if(S&&S.chauffeur&&S.vehicule&&debutDoneToday()&&!finDoneToday()){ e.preventDefault(); e.returnValue=''; } }catch(_){}
 });
 
 /* Pull-to-refresh : tirer vers le bas en haut de page recharge l'app (récupère la dernière version) */
@@ -1273,12 +1273,29 @@ function forceReload(){
 }
 
 /* ---------- BOOT ---------- */
+/* Le SDK restaure la session persistee de facon ASYNCHRONE. Lire
+   firebase.auth().currentUser juste apres initializeApp renvoyait donc
+   toujours null, meme pour un chauffeur deja connecte : on enchainait sur
+   signInAnonymously(), qui remplacait son compte agent. Consequences —
+   l'ecran de reconnexion automatique ne se declenchait jamais, et tout
+   rechargement en cours de journee (mise a jour du service worker, tirer
+   pour actualiser, passage de minuit) renvoyait le chauffeur a la saisie
+   de son code.
+   On attend donc le premier evenement d'authentification. Le desabonnement
+   est immediat : signInAnonymously() en declencherait un second. */
 (function(){
-  var u=firebase.auth().currentUser;
-  if(u&&!u.isAnonymous){ loadBase(); return; }   // compte agent deja ouvert
-  firebase.auth().signInAnonymously()
-    .then(loadBase)
-    .catch(function(e){document.getElementById('loadTxt').textContent='Erreur connexion : '+e.message;});
+  var fait=false;
+  function suite(u){
+    if(fait)return; fait=true;
+    if(u&&!u.isAnonymous){ loadBase(); return; }   // compte agent restaure
+    firebase.auth().signInAnonymously()
+      .then(loadBase)
+      .catch(function(e){document.getElementById('loadTxt').textContent='Erreur connexion : '+e.message;});
+  }
+  var stop=firebase.auth().onAuthStateChanged(function(u){ try{stop();}catch(e){} suite(u); });
+  // Filet : si l'evenement ne venait jamais, l'application resterait bloquee
+  // sur l'ecran de chargement.
+  setTimeout(function(){ suite(firebase.auth().currentUser); },8000);
 })();
 
 // Documents de tournee charges au demarrage : { '79': {...}, 'MASTER': {...} }
@@ -1346,7 +1363,7 @@ async function loadBaseNetwork(){
 
 /* ---------- LOGIN ---------- */
 function renderChauffeurs(){
-  const opts='<option value="">— Choisis ton nom —</option>'+CHAUFFEURS.map(c=>`<option value="${c.id}">${(c.prenom||'').trim()} ${(c.nom||'').trim()}</option>`).join('');
+  const opts='<option value="">— Choisis ton nom —</option>'+CHAUFFEURS.map(c=>`<option value="${esc(c.id)}">${esc((c.prenom||'').trim())} ${esc((c.nom||'').trim())}</option>`).join('');
   document.getElementById('chaufList').innerHTML=`
     <div class="fld"><div class="sel-wrap"><select id="chaufSel" onchange="chkLogin()">${opts}</select></div></div>
     <div class="fld"><label>Ton code à 6 chiffres</label><input id="chaufPwd" type="tel" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="••••••" oninput="chkLogin()" onkeydown="if(event.key==='Enter')confirmChauffeur()"></div>
@@ -1429,14 +1446,20 @@ function showBoot(done){
 function checkUnclosedDays(){
   if(!S.chauffeur||typeof db==='undefined'||!db)return;
   const dates=[1,2,3].map(n=>{const d=new Date();d.setDate(d.getDate()-n);return isoLocal(d);});
+  // Une journee « commencee » se reconnait a la prise de poste, porte
+  // obligatoire du demarrage. L'EDL reste lu : il vaut aussi debut de journee,
+  // mais il n'est atteignable que par le menu, donc rarement present. Sans la
+  // prise de poste, l'alerte ne se declenchait quasiment jamais.
   Promise.all([
+    db.collection('chauffeurs_prise_poste').where('date','in',dates).get(),
     db.collection('chauffeurs_edl').where('date','in',dates).get(),
     db.collection('chauffeurs_checklist_fin').where('date','in',dates).get()
-  ]).then(([edlS,finS])=>{
+  ]).then(([ppS,edlS,finS])=>{
     const mine=S.chauffeur.id, fins=new Set();
     finS.forEach(d=>{const x=d.data();if(x.chauffeur===mine)fins.add(x.date+'_'+x.vehicule);});
     let target=null;
-    edlS.forEach(d=>{const x=d.data();if(x.chauffeur!==mine||target)return;const k=x.date+'_'+x.vehicule;if(fins.has(k))return;let w=false;try{w=localStorage.getItem('fin_warned_'+k)==='1';}catch(e){}if(!w)target={date:x.date,veh:x.vehicule,k};});
+    const examiner=d=>{const x=d.data();if(x.chauffeur!==mine||target)return;if(!x.date||!x.vehicule)return;const k=x.date+'_'+x.vehicule;if(fins.has(k))return;let w=false;try{w=localStorage.getItem('fin_warned_'+k)==='1';}catch(e){}if(!w)target={date:x.date,veh:x.vehicule,k};};
+    ppS.forEach(examiner); edlS.forEach(examiner);
     if(target){
       try{localStorage.setItem('fin_warned_'+target.k,'1');}catch(e){}
       let dfr=target.date;try{dfr=new Date(target.date+'T12:00:00').toLocaleDateString('fr-FR');}catch(e){}
@@ -1670,7 +1693,7 @@ async function pickVehicule(id){
   // obligatoire, les verrous etant indexes par camion. Le chargement, lui,
   // a ete transfere : on l'ouvre sans l'imposer, pour verification.
   if(!aDesArrets) enterHub();
-  else if(!edlDoneToday()) openPrisePoste(true);
+  else if(!debutDoneToday()) openPrisePoste(true);
   else if(_chargeTransfert) openCharge(false);
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
@@ -1693,20 +1716,32 @@ async function syncVerrousJour(){
   if(!S.chauffeur||!S.vehicule)return;
   const moi=S.chauffeur.id, veh=S.vehicule.id;
   try{
-    const [edlS,finS]=await Promise.all([
+    const [ppS,edlS,finS]=await Promise.all([
+      db.collection('chauffeurs_prise_poste').where('date','==',TODAY).limit(60).get(),
       db.collection('chauffeurs_edl').where('date','==',TODAY).limit(60).get(),
       db.collection('chauffeurs_checklist_fin').where('date','==',TODAY).limit(60).get()
     ]);
-    let edl=false,fin=false;
-    edlS.forEach(d=>{const x=d.data();if(x.chauffeur===moi&&x.vehicule===veh)edl=true;});
+    let debut=false,fin=false;
+    // La prise de poste est la porte obligatoire du demarrage : c'est elle
+    // qu'il faut interroger en priorite. Sans cette lecture, un cache vide
+    // faisait refaire la prise de poste et creait un doublon en base.
+    ppS.forEach(d=>{const x=d.data();if(x.chauffeur===moi&&x.vehicule===veh)debut=true;});
+    edlS.forEach(d=>{const x=d.data();if(x.chauffeur===moi&&x.vehicule===veh)debut=true;});
     finS.forEach(d=>{const x=d.data();if(x.chauffeur===moi&&x.vehicule===veh)fin=true;});
-    if(edl)markEdlDone();
+    if(debut)markDebutDone();
     if(fin)markFinDone();
   }catch(e){ console.warn('verrous',e); } // hors ligne : on garde le localStorage
 }
-function edlKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
-function edlDoneToday(){ try{return localStorage.getItem(edlKey())==='1';}catch(e){return false;} }
-function markEdlDone(){ try{localStorage.setItem(edlKey(),'1');}catch(e){} }
+/* Verrou « debut de journee fait » pour ce camion. Il ne porte PAS sur l'etat
+   des lieux : la porte obligatoire au demarrage est la PRISE DE POSTE, qui
+   ecrit dans chauffeurs_prise_poste. L'ecran EDL, atteignable seulement par
+   le menu du hub, pose le meme verrou car il vaut aussi constat de depart.
+   La chaine de caracteres 'edl_ok_' reste celle d'origine : la changer aurait
+   redemande une prise de poste a tous les chauffeurs deja partis le jour du
+   deploiement. */
+function debutKey(){ return 'edl_ok_'+TODAY+'_'+(S.vehicule?S.vehicule.id:''); }
+function debutDoneToday(){ try{return localStorage.getItem(debutKey())==='1';}catch(e){return false;} }
+function markDebutDone(){ try{localStorage.setItem(debutKey(),'1');}catch(e){} }
 /* Identifiant du document de chargement : date + camion + chauffeur.
    Sans le chauffeur, un collegue reprenant le camion dans la journee
    heritait de son numero de tour et de son total. */
@@ -1774,7 +1809,7 @@ function openStop(num,ordre){
   const st=statutArret(num,ordre);
   const doneBanner=st&&st.ok?(st.ferme?`<div class="done-banner" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569"><svg viewBox="0 0 24 24" style="stroke:#475569"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
      Service fermé (temporaire)${st.motif?(' — '+(''+st.motif).replace(/</g,'&lt;')):''}</div>`:`<div class="done-banner"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-     Dépose validée ${st.mode==='qr'?'(QR scanné)':st.mode==='photo'?'(photo)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}</div>`):'';
+     Dépose validée ${st.mode==='qr'?'(QR scanné)':st.mode==='photo'?'(photo)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}${(st.passages&&st.passages.length)?('<div style="font-size:12px;font-weight:600;margin-top:5px;opacity:.85">+ '+st.passages.length+' repassage'+(st.passages.length>1?'s':'')+' \u00b7 '+st.passages.map(function(p){return p.at?new Date(p.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';}).join(', ')+'</div>'):''}</div>`):'';
   document.getElementById('detBody').innerHTML=`
     ${doneBanner}
     <div class="glass det-card">
@@ -1785,12 +1820,13 @@ function openStop(num,ordre){
       <div class="plaque"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <div style="flex:1;min-width:0"><div class="l">Accès</div><span class="acc-big" id="accVal">${esc(a.acces||'—')}</span></div></div>
       ${a.contact?`<div class="det-row"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 4h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 11.8a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
-        <div><div class="l">Contact</div><div class="v">${a.contact}</div></div></div>`:''}
+        <div><div class="l">Contact</div><div class="v">${esc(a.contact)}</div></div></div>`:''}
       ${a.consignes?`<div class="det-row"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg>
-        <div><div class="l">Consignes</div><div class="v">${a.consignes}</div></div></div>`:''}
+        <div><div class="l">Consignes</div><div class="v">${esc(a.consignes)}</div></div></div>`:''}
     </div>
     ${validLL(a)?`<button class="nav-btn" onclick="cGoToStop('${num}',${ordre})"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (guidage)</button>`:(a.adresse?`<a class="nav-btn" href="${mapsTo(a.adresse)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (Maps)</a>`:'')}
-    ${st&&st.ok?'':`
+    ${st&&st.ok?`
+    <button class="manual" onclick="askRepassage()">Repasser sur ce site (dépannage)</button>`:`
     <button class="scan-btn" onclick="scanStop('qr')"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M4 12h16"/></svg>
       <div><b>Scanner le QR du site</b><span>Valider la dépose chez l'adhérent</span></div></button>
     <button class="manual" onclick="scanStop('manuel')">Pas de QR — valider quand même</button>
@@ -1816,12 +1852,59 @@ async function validateDepose(num,ordre,mode,client,rolls){
   try{
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(docId).set({
       date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
-      arrets:{[ordre]:{ok:true,mode,at:Date.now(),arriveeAt:(_arriveeAt[num+'_'+ordre]||null),client:client||'',
+      arrets:{[ordre]:{ok:true,mode,at:Date.now(),arriveeAt:(_arriveeAt[num+'_'+ordre]||null),
+        arriveeGpsAt:(_arriveeGps[num+'_'+ordre]||null),client:client||'',
         rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll')}}
     },{merge:true}));
     uiToast(fbMsg(_r,'Dépose validée — '+(client||'')),'ok');
     go('jour'); // le listener onSnapshot rafraîchira la journée
   }catch(e){uiToast('Erreur enregistrement','err');}
+}
+/* ==========================================================================
+   REPASSAGE (depannage en cours de journee)
+   Un client deja livre le matin peut redemander du linge a 11 h. L'arret
+   etait alors fige : plus aucun bouton, et effacer la journee cote
+   responsable etait la seule issue.
+
+   On n'ECRASE PAS le premier passage. Les champs de premier niveau restent
+   ce qu'ils sont — `at` et `arriveeAt` gardent l'heure de la premiere
+   livraison, ce dont dependent l'heure de depart de la tournee et le temps
+   sur site cote responsable. Ce qui change :
+     rollsDeposes / rollsRecuperes  incrementes, donc toujours le TOTAL du jour
+     passages[]                     un objet par passage supplementaire
+     nbPassages                     compteur, pour reperer l'arret d'un coup
+
+   increment() et arrayUnion() plutot qu'une relecture : deux telephones ou
+   un envoi differe hors reseau ne peuvent pas s'ecraser mutuellement.
+   update() et non set() : l'arret existe forcement, puisqu'il est valide.
+   ========================================================================== */
+async function repasserArret(num,ordre,client,rolls){
+  const docId=TODAY+'_T'+num;
+  rolls=rolls||{};
+  const base='arrets.'+ordre+'.';
+  const FV=firebase.firestore.FieldValue;
+  try{
+    var maj={};
+    maj[base+'rollsDeposes']=FV.increment(rolls.deposes||0);
+    maj[base+'rollsRecuperes']=FV.increment(rolls.recuperes||0);
+    maj[base+'nbPassages']=FV.increment(1);
+    maj[base+'passages']=FV.arrayUnion({at:Date.now(),mode:'repassage',
+      rollsDeposes:(rolls.deposes||0),rollsRecuperes:(rolls.recuperes||0),
+      chauffeur:S.chauffeur.id,chauffeurNom:chNom()});
+    var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(docId).update(maj));
+    uiToast(fbMsg(_r,'Repassage enregistré — '+(client||'')),'ok');
+    go('jour');
+  }catch(e){ uiToast('Erreur enregistrement','err'); }
+}
+async function askRepassage(){
+  const {num,ordre,a}=S.curStop;
+  const ok=await uiConfirm('Repasser sur ce site',
+    a.client+' \u2014 tu y es d\u00e9j\u00e0 pass\u00e9 aujourd\u2019hui. Ce nouveau passage s\u2019ajoute au premier, il ne le remplace pas.',
+    'Repasser');
+  if(!ok)return;
+  const r=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
+  if(!r)return;
+  repasserArret(num,ordre,a.client,r);
 }
 
 /* ==========================================================================
@@ -1992,7 +2075,21 @@ async function openScanner(){
   catch(e){closeScanner();uiToast('Caméra indisponible — validation manuelle','err');return scanStop('manuel');}
   const vid=document.getElementById('scanVid');vid.srcObject=_scanStream;await vid.play().catch(()=>{});
   if('BarcodeDetector' in window){try{_scanDet=new BarcodeDetector({formats:['qr_code']});}catch(e){_scanDet=null;}}
-  if(_scanDet){_scanLoop=scanNative;}else{await loadJsQR();_scanLoop=scanJsQR;}
+  if(_scanDet){_scanLoop=scanNative;}
+  else{
+    await loadJsQR();
+    /* loadJsQR() se resout aussi sur onerror. Hors reseau et sans la
+       bibliotheque en cache, scanJsQR() rebouclait alors toutes les 150 ms
+       indefiniment : statut fige sur « Recherche du QR… », camera allumee,
+       batterie qui descend, et aucun message. On bascule sur la validation
+       manuelle plutot que de laisser le chauffeur devant un ecran mort. */
+    if(!window.jsQR){
+      closeScanner();
+      uiToast('Lecture du QR indisponible hors réseau — validation manuelle','err');
+      return scanStop('manuel');
+    }
+    _scanLoop=scanJsQR;
+  }
   scheduleScan();
 }
 function scheduleScan(){_scanTimer=setTimeout(()=>{if(_scanLoop)_scanLoop();},150);}
@@ -2156,11 +2253,49 @@ function onGeo(pos){
   const lat=pos.coords.latitude, lng=pos.coords.longitude, acc=pos.coords.accuracy;
   setGeoLine('on','Position partagée');
   checkDepotReturn(lat,lng);
+  detecterArriveeSite(lat,lng,acc);
   const now=Date.now();
   const moved=(_geoLast.lat!=null)?geoDist(_geoLast.lat,_geoLast.lng,lat,lng):1e9;
   if(now-_geoLast.t<90000 && moved<200)return; // throttle 90 s / 200 m → coût Firestore minimal
   _geoLast={t:now,lat,lng};
   pushPosition(lat,lng,acc);
+}
+/* ==========================================================================
+   ARRIVEE SUR SITE PAR GPS
+   `arriveeAt` est pose a l'ouverture de la fiche d'arret. Ce n'est pas
+   l'arrivee : un chauffeur qui ouvre la fiche en roulant pour lire le code
+   d'acces gonfle son temps, un chauffeur qui decharge d'abord l'ecrase.
+
+   On horodate donc aussi le premier moment ou le camion se trouve a moins de
+   ARRIVEE_M de l'arret. Ce repere est ECRIT A COTE, dans `arriveeGpsAt` :
+   l'ancien reste intact, rien de ce qui existe n'est perdu ni reinterprete.
+
+   Limites assumees, elles comptent pour lire le chiffre :
+   - la position n'est relevee que toutes les 90 s ou tous les 200 m, donc le
+     repere est juste a une minute et demie pres ;
+   - passer en voiture a moins de 150 m d'un site non encore livre le declenche
+     aussi. Le temps sort alors trop grand, jamais trop petit ;
+   - un site sans coordonnees (validLL faux) n'est pas detecte du tout, et le
+     responsable retombe sur l'ancienne mesure ;
+   - une precision GPS mediocre (sous-sol, canyon urbain) est ignoree au-dela
+     de ARRIVEE_ACC, plutot que de produire un faux repere.
+   ========================================================================== */
+const ARRIVEE_M=150;      // rayon de detection, en metres
+const ARRIVEE_ACC=120;    // au-dela de cette imprecision GPS, on s'abstient
+var _arriveeGps={};
+function detecterArriveeSite(lat,lng,acc){
+  if(!S.tournees||!S.tournees.length)return;
+  if(acc&&acc>ARRIVEE_ACC)return;          // position trop floue : on ne conclut rien
+  S.tournees.forEach(function(t){
+    (t.arrets||[]).forEach(function(a){
+      if(!validLL(a))return;
+      var cle=t.tid+'_'+a.ordre;
+      if(_arriveeGps[cle])return;           // premiere approche seulement
+      var st=statutArret(t.tid,a.ordre);
+      if(st&&st.ok)return;                  // deja livre : plus rien a mesurer
+      if(geoDist(lat,lng,a.lat,a.lng)<=ARRIVEE_M) _arriveeGps[cle]=Date.now();
+    });
+  });
 }
 function checkDepotReturn(lat,lng){
   if(!_depotLL||_finPrompted)return;
@@ -2775,11 +2910,17 @@ async function confirmCharge(){
   busy('Enregistrement…');
   try{ await saveCharge(); }
   finally{ busyDone(); }
-  markChargeDone();
   uiToast('Fiche de contrôle mise à jour','ok');
-  _chargeMandatory=false;
   const _geoOk = await exigerGeo();
   if(!_geoOk) return;            // pas de depart sans localisation
+  /* Le verrou « chargement fait » se pose APRES l'accord de localisation.
+     Pose avant, il survivait au refus : le chauffeur fermait l'application,
+     la rouvrait, et pickVehicule() l'envoyait direct a l'accueil sans jamais
+     redemander la position. Le depart sans localisation redevenait possible.
+     Le chargement, lui, est deja enregistre en base : rien n'est perdu si le
+     chauffeur reste bloque ici. */
+  markChargeDone();
+  _chargeMandatory=false;
   startGeo();
   demarrerVeilleGeo();
   enterHub();
@@ -3587,7 +3728,7 @@ async function saveFin(){
     const _t1=(S.tournees&&S.tournees[0])?String(S.tournees[0].tid):'';
     const ph=PH['fin']||[];
     const ref=db.collection('chauffeurs_checklist_fin').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
     // Photos envoyees seulement si l'enregistrement est bien parti : hors
     // reseau, on ne bloque pas la cloture pour autant.
     if(ph.length&&_r==='ok'){
@@ -3595,7 +3736,8 @@ async function saveFin(){
       try{
         const u=await uploadPhotos('checklist_fin',ref.id,ph.map(x=>({data:x.data,type:'tableau_bord'})));
         if(u&&u.length)await fbWrite(ref.set({photos:u},{merge:true}));
-      }catch(e){console.warn('photos cloture',e);}
+        else alertePhotos(ph.length,u,'Clôture');
+      }catch(e){console.warn('photos cloture',e);alertePhotos(ph.length,null,'Clôture');}
       busyDone();
     }else if(ph.length){
       uiToast('Clôture enregistrée — photos non envoyées (hors réseau)','err');
@@ -3695,6 +3837,17 @@ function renderThumbs(bucket,thumbsId){
   el.innerHTML=(PH[bucket]||[]).map((p,i)=>`<div class="thumb"><img src="${p.data}"><button class="rm" onclick="removePhoto('${bucket}','${thumbsId}',${i})">×</button></div>`).join('');
 }
 function removePhoto(bucket,thumbsId,i){(PH[bucket]||[]).splice(i,1);renderThumbs(bucket,thumbsId);}
+/* uploadPhotos() rend un tableau vide sur TOUTE erreur — reseau, Apps Script,
+   quota Drive. Les appelants faisaient alors « if(urls.length) » et n'ecrivaient
+   rien : la photo etait perdue en silence, le chauffeur repartant avec un
+   message vert. On l'avertit desormais, en lui disant quoi faire. */
+function alertePhotos(n, urls, quoi){
+  if(!n || (urls && urls.length)) return false;
+  uiToast(quoi+' enregistré'+(quoi.slice(-1)==='e'?'e':'')+' \u2014 '
+    + (n===1?'la photo n\u2019est pas partie':'les '+n+' photos ne sont pas parties')
+    + ', préviens le responsable','err');
+  return true;
+}
 async function uploadPhotos(category,refId,photos){
   if(!photos||!photos.length)return [];
   try{
@@ -3834,14 +3987,14 @@ function ppBack(){
   document.getElementById('ppHome').style.display='';
 }
 function ppFinish(){
-  markEdlDone();
+  markDebutDone();
   if(_ppMandatory){_ppMandatory=false;openCharge(true);}
   else enterHub();
 }
 async function ppRas(){
   busy('Enregistrement…');
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),tournee:tourneeJour(),date:TODAY,type:'ras',probleme:false,detail:null,photos:[],at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_prise_poste').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:'ras',probleme:false,detail:null,photos:[],at:Date.now()}));
     uiToast(fbMsg(_r,'Poste pris'),'ok');
     ppFinish();
   }catch(e){uiToast('Échec enregistrement','err');}
@@ -3856,9 +4009,12 @@ async function ppSaveProbleme(){
   busy('Envoi du signalement…');
   try{
     const ref=db.collection('chauffeurs_prise_poste').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],at:Date.now()}));
-    if(ph.length&&_r==='ok'){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');const u=await uploadPhotos('prise_poste',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)await fbWrite(ref.update({photos:u}));}
-    uiToast(fbMsg(_r,'Problème signalé'),'ok');
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],nbPhotos:ph.length,at:Date.now()}));
+    let _u=[];
+    if(ph.length&&_r==='ok'){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');_u=await uploadPhotos('prise_poste',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(_u.length)await fbWrite(ref.update({photos:_u}));}
+    // `nbPhotos` reste en base meme si l'envoi echoue : le responsable voit
+    // alors « Envoi incomplet » au lieu d'un tiret, et sait qu'une photo manque.
+    if(!alertePhotos(ph.length,_u,'Signalement')) uiToast(fbMsg(_r,'Problème signalé'),'ok');
     ppFinish();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
@@ -3882,13 +4038,14 @@ async function saveEdl(){
   busy('Envoi de la déclaration…');
   try{
     const ref=db.collection('chauffeurs_edl').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],signature:null,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],nbPhotos:ph.length,signature:null,at:Date.now()}));
     const patch={};
-    if(ph.length&&_r==='ok'){busy('Envoi des photos…');const u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(u.length)patch.photos=u;}
+    let _u=[];
+    if(ph.length&&_r==='ok'){busy('Envoi des photos…');_u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(_u.length)patch.photos=_u;}
     if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
     if(Object.keys(patch).length)await fbWrite(ref.update(patch));
-    markEdlDone();
-    uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
+    markDebutDone();
+    if(!alertePhotos(ph.length,_u,'Déclaration')) uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
     if(_edlMandatory){_edlMandatory=false;openCharge(true);}
     else openEdl();
   }catch(e){uiToast('Échec envoi','err');}
@@ -3900,7 +4057,7 @@ async function saveNoDamage(){
   busy('Enregistrement…');
   try{
     const _r=await fbWrite(db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()}));
-    markEdlDone();
+    markDebutDone();
     uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
     _edlMandatory=false;openCharge(true);
   }catch(e){uiToast('Échec','err');}
