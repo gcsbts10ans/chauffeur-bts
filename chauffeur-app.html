@@ -1073,7 +1073,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v63';
+const APP_VERSION='v64';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1758,11 +1758,19 @@ function renderJournee(){
 }
 
 /* ---------- DETAIL ARRET ---------- */
+/* Arrivee sur site : horodatee a la premiere ouverture de la fiche d'arret.
+   Conservee en local, elle accompagne la validation pour que le responsable
+   dispose d'un temps sur site reel. */
+var _arriveeAt = {};
 function openStop(num,ordre){
   const t=tourById(num);
   const a=t&&(t.arrets||[]).find(x=>x.ordre===ordre);
   if(!a)return;
   S.curStop={num,ordre,a};
+  // Premiere ouverture de cette fiche aujourd'hui : c'est l'arrivee sur site.
+  _arriveeAt = _arriveeAt || {};
+  var _cle = num+'_'+ordre;
+  if(!_arriveeAt[_cle]) _arriveeAt[_cle] = Date.now();
   const st=statutArret(num,ordre);
   const doneBanner=st&&st.ok?(st.ferme?`<div class="done-banner" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569"><svg viewBox="0 0 24 24" style="stroke:#475569"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
      Service fermé (temporaire)${st.motif?(' — '+(''+st.motif).replace(/</g,'&lt;')):''}</div>`:`<div class="done-banner"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
@@ -1808,7 +1816,7 @@ async function validateDepose(num,ordre,mode,client,rolls){
   try{
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(docId).set({
       date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
-      arrets:{[ordre]:{ok:true,mode,at:Date.now(),client:client||'',
+      arrets:{[ordre]:{ok:true,mode,at:Date.now(),arriveeAt:(_arriveeAt[num+'_'+ordre]||null),client:client||'',
         rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll')}}
     },{merge:true}));
     uiToast(fbMsg(_r,'Dépose validée — '+(client||'')),'ok');
