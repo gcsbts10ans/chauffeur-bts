@@ -1073,7 +1073,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v67';
+const APP_VERSION='v68';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -2753,14 +2753,18 @@ const JOURS_FR=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi
 /* ==========================================================================
    POIDS DES CONTENANTS
    Deux formats circulent, et les confondre fausse tout le calcul de charge.
-     ROLL    250 kg  chariot standard, propre comme sale (M. Andre, 28/08)
+     ROLL    220 kg  chariot standard, propre comme sale. Valeur ramenee de
+                     250 a 220 kg le 07/09/2026, arbitrage M. DREZEN.
      CABRI    75 kg  petit conteneur, valeur confirmee par M. Andre le
                      01/09/2026 via John Clerge. 14 sites livres ainsi.
-   Avant cette distinction, l'application comptait tout a 250 kg : elle
-   affichait 1 500 kg pour un Master qui en transporte 800. Le chiffre faux
-   etait aussi trompeur qu'une absence de chiffre.
+   Avant cette distinction, l'application comptait tout au poids du roll :
+   elle affichait 1 500 kg pour un Master qui en transporte 800. Le chiffre
+   faux etait aussi trompeur qu'une absence de chiffre.
+   ATTENTION : bts-responsable porte les MEMES constantes. Toute modification
+   ici doit y etre reportee, sinon les deux applications annoncent des poids
+   differents pour le meme chargement.
    ========================================================================== */
-const ROLL_KG=250;
+const ROLL_KG=220;
 const CABRI_KG=75;
 /* Chargement au depart de l'usine : uniquement des rolls PROPRES.
    Le linge sale n'existe pas encore a ce moment — il est recupere chez les
