@@ -615,9 +615,48 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .urg-btn.on{background:#DC2626;border-color:#DC2626}
 .urg-btn.on svg{stroke:#fff}
 .sig-bts{text-align:center;font-size:11px;color:var(--sub);opacity:.75;letter-spacing:.2px;margin:18px 0 6px;font-weight:500}
+/* ---------- BtsSplash — ecran de demarrage commun aux applications BTS ----------
+   Remplace l'ancien ecran s-load. Il n'ajoute aucun delai : il habille
+   l'amorcage qui existe deja. Fond navy #1E3C72, celui de la charte
+   chauffeur, et non le bleu clair des applications d'encadrement.
+   Le logo est deja embarque en base64 dans .logo-gcs : reutilise tel quel,
+   donc visible hors ligne sans un octet de plus. */
+#bts-splash{position:fixed;inset:0;z-index:99999;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'DM Sans',system-ui,sans-serif;transition:opacity .35s ease}
+#bts-splash.bts-splash-cache{opacity:0;pointer-events:none}
+.bts-splash-centre{text-align:center}
+.bts-splash-logo{width:110px;height:110px;border-radius:24px;background:#fff;padding:12px;
+  background-size:calc(100% - 24px);background-position:center;background-repeat:no-repeat;
+  box-shadow:0 10px 30px rgba(0,0,0,.3);margin:0 auto 22px}
+.bts-splash-nom{font-size:32px;color:#fff;font-weight:800;letter-spacing:-.02em}
+.bts-splash-ver{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;min-height:16px}
+.bts-splash-statut{position:absolute;bottom:38px;left:0;right:0;text-align:center;
+  font-size:12.5px;color:rgba(255,255,255,.85);
+  display:flex;align-items:center;justify-content:center;gap:10px}
+.bts-splash-pts span{display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:#fff;margin:0 2px;animation:bts-splash-pulse 1.2s infinite ease-in-out}
+.bts-splash-pts span:nth-child(2){animation-delay:.2s}
+.bts-splash-pts span:nth-child(3){animation-delay:.4s}
+@keyframes bts-splash-pulse{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.bts-splash-sign{position:absolute;bottom:12px;right:16px;font-size:9.5px;color:rgba(255,255,255,.45)}
+@media(max-height:600px){.bts-splash-logo{width:84px;height:84px;border-radius:18px}.bts-splash-nom{font-size:26px}}
 </style>
 </head>
 <body>
+<div id="bts-splash" role="status" aria-live="polite">
+  <div class="bts-splash-centre">
+    <div class="bts-splash-logo logo-gcs"></div>
+    <div class="bts-splash-nom">Chauffeurs BTS</div>
+    <div class="bts-splash-ver" id="bts-splash-ver"></div>
+  </div>
+  <div class="bts-splash-statut">
+    <span id="bts-splash-msg">Démarrage</span>
+    <span class="bts-splash-pts"><span></span><span></span><span></span></span>
+  </div>
+  <div class="bts-splash-sign">Eric TISSERAND — conception et réalisation</div>
+</div>
+
 <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div>
 
 <div class="phone">
@@ -1073,7 +1112,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v68';
+const APP_VERSION='v69';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1272,6 +1311,31 @@ function forceReload(){
   loadBaseNetwork();
 }
 
+/* ============================================================
+   BtsSplash — ecran de demarrage commun aux applications BTS
+   API : statut(txt) · version(v) · fin()
+
+   REGLE ABSOLUE : fin() doit etre appele sur TOUS les chemins de
+   sortie, sinon le chauffeur reste sur un ecran navy et l'application
+   est inutilisable. Le delai de 15 s est un filet, pas une solution.
+   Ici, tous les chemins passent par loadBase() ou par son echec :
+   le splash se retire donc lorsque l'ecran de connexion est pret,
+   ou lorsque le message d'erreur s'affiche a sa place.
+   ============================================================ */
+const BtsSplash=(function(){
+  const el=document.getElementById('bts-splash');
+  let termine=false;
+  function statut(txt){const m=document.getElementById('bts-splash-msg');if(m&&!termine)m.textContent=txt;}
+  function version(v){const e=document.getElementById('bts-splash-ver');if(e)e.textContent=v?'version '+String(v).replace(/^v/i,''):'';}
+  function fin(){
+    if(termine||!el)return;
+    termine=true;
+    el.classList.add('bts-splash-cache');
+    setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},400);
+  }
+  setTimeout(fin,15000);   // garde-fou : jamais d'ecran bloque
+  return {statut:statut,version:version,fin:fin};
+})();
 /* ---------- BOOT ---------- */
 /* Le SDK restaure la session persistee de facon ASYNCHRONE. Lire
    firebase.auth().currentUser juste apres initializeApp renvoyait donc
@@ -1290,8 +1354,10 @@ function forceReload(){
     if(u&&!u.isAnonymous){ loadBase(); return; }   // compte agent restaure
     firebase.auth().signInAnonymously()
       .then(loadBase)
-      .catch(function(e){document.getElementById('loadTxt').textContent='Erreur connexion : '+e.message;});
+      .catch(function(e){BtsSplash.fin();document.getElementById('loadTxt').textContent='Erreur connexion : '+e.message;});
   }
+  BtsSplash.version(APP_VERSION);
+  BtsSplash.statut('Connexion sécurisée');
   var stop=firebase.auth().onAuthStateChanged(function(u){ try{stop();}catch(e){} suite(u); });
   // Filet : si l'evenement ne venait jamais, l'application resterait bloquee
   // sur l'ecran de chargement.
@@ -1337,6 +1403,7 @@ function loadBase(){
 
 async function loadBaseNetwork(){
   try{
+    BtsSplash.statut('Chargement du référentiel');
     document.getElementById('loadTxt').textContent='Chargement…';
     // Lectures bornees : referentiel a croissance lente, mais aucune lecture
     // de collection entiere ne doit partir sans plafond en production.
@@ -1354,11 +1421,11 @@ async function loadBaseNetwork(){
       .sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
     VEHICULES=cv.docs.map(d=>d.data()).filter(v=>v.actif!==false)
       .sort((a,b)=>(a.id||'').localeCompare(b.id||''));
-    if(!CHAUFFEURS.length){document.getElementById('loadTxt').textContent='Base vide — lance l\'outil d\'init.';return;}
+    if(!CHAUFFEURS.length){BtsSplash.fin();document.getElementById('loadTxt').textContent='Base vide — lance l\'outil d\'init.';return;}
     writeCache();
     renderChauffeurs();
     enterLogin();
-  }catch(e){document.getElementById('loadTxt').textContent='Erreur : '+e.message;}
+  }catch(e){BtsSplash.fin();document.getElementById('loadTxt').textContent='Erreur : '+e.message;}
 }
 
 /* ---------- LOGIN ---------- */
@@ -1471,6 +1538,10 @@ function checkUnclosedDays(){
 /* ---------- RECONNEXION AUTO (3 s, téléphone attribué) ---------- */
 let _recoTimer=null;
 function enterLogin(){
+  /* Chemin de sortie normal du splash : l'application est prete, le
+     chauffeur peut agir. Place ici et non dans loadBase, pour couvrir
+     aussi la reconnexion automatique (startReco) qui part d'ici. */
+  BtsSplash.fin();
   var lastId=null;
   try{lastId=localStorage.getItem('chf_last');}catch(e){}
   var c=lastId&&CHAUFFEURS.find(function(x){return x.id===lastId;});
