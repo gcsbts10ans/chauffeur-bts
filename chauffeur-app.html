@@ -626,8 +626,13 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
   font-family:'DM Sans',system-ui,sans-serif;transition:opacity .35s ease}
 #bts-splash.bts-splash-cache{opacity:0;pointer-events:none}
 .bts-splash-centre{text-align:center}
-.bts-splash-logo{width:110px;height:110px;border-radius:24px;background:#fff;padding:12px;
-  background-size:calc(100% - 24px);background-position:center;background-repeat:no-repeat;
+/* background-COLOR et non le raccourci `background` : celui-ci remet
+   background-image a none et effaçait le logo pose par .logo-gcs, qui
+   apparaissait alors comme un rectangle blanc. .logo-gcs fournit deja
+   contain / no-repeat / center ; background-origin garde l'image dans
+   la zone de contenu, donc a l'interieur du padding. */
+.bts-splash-logo{width:110px;height:110px;border-radius:24px;background-color:#fff;padding:12px;
+  background-origin:content-box;box-sizing:border-box;
   box-shadow:0 10px 30px rgba(0,0,0,.3);margin:0 auto 22px}
 .bts-splash-nom{font-size:32px;color:#fff;font-weight:800;letter-spacing:-.02em}
 .bts-splash-ver{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px;min-height:16px}
@@ -1112,7 +1117,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v69';
+const APP_VERSION='v70';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
