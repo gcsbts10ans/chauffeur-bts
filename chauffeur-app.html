@@ -1117,7 +1117,7 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v71';
+const APP_VERSION='v72';
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
 // Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
@@ -1455,13 +1455,30 @@ function chkLogin(){
   var ok=document.getElementById('chaufSel').value&&/^[0-9]{6}$/.test(document.getElementById('chaufPwd').value);
   document.getElementById('chaufGo').disabled=!ok;
 }
-function confirmChauffeur(){
+async function confirmChauffeur(){
   var id=document.getElementById('chaufSel').value;
   var pin=(document.getElementById('chaufPwd').value||'').trim();
   if(!id)return;
   if(!/^[0-9]{6}$/.test(pin)){ uiToast('Le code fait 6 chiffres','err'); return; }
   var c=CHAUFFEURS.find(function(x){return x.id===id;});
   var agentId=c&&c.agentId;
+  /* Le referentiel est servi depuis le cache local, valable plusieurs heures.
+     Un profil relie a l'instant par le responsable n'y figure donc pas encore :
+     le chauffeur lisait « ton compte n'est pas encore relie » alors que la
+     liaison etait faite. On relit le profil en base AVANT d'afficher ce
+     message \u2014 une seule lecture, et seulement sur ce chemin d'erreur. */
+  if(!agentId){
+    busy('V\u00e9rification\u2026');
+    try{
+      var _d=await db.collection('chauffeurs_profils').doc(id).get();
+      var _x=_d.exists?_d.data():null;
+      if(_x&&_x.agentId){
+        agentId=_x.agentId;
+        if(c){ c.agentId=agentId; writeCache(); }   // le cache repart a jour
+      }
+    }catch(e){}
+    busyDone();
+  }
   if(!agentId){ uiToast('Ton compte n\'est pas encore reli\u00e9 \u2014 vois avec le responsable','err'); return; }
   var btn=document.getElementById('chaufGo'); if(btn)btn.disabled=true;
   busy('Connexion\u2026');
