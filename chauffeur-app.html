@@ -646,6 +646,18 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 @keyframes bts-splash-pulse{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
 .bts-splash-sign{position:absolute;bottom:12px;right:16px;font-size:9.5px;color:rgba(255,255,255,.45)}
 @media(max-height:600px){.bts-splash-logo{width:84px;height:84px;border-radius:18px}.bts-splash-nom{font-size:26px}}
+/* Suivi du traitement par le responsable, sous une declaration du chauffeur.
+   Filet de couleur a gauche : l'etat se lit sans lire le texte. */
+.suivi{margin-top:10px;padding:9px 12px;border-radius:12px;background:rgba(255,255,255,.55);
+  border-left:4px solid #94a3b8;font-size:12.5px;line-height:1.45}
+.suivi b{display:block;font-weight:700;color:var(--ink)}
+.suivi span{color:#64748b;font-size:11.5px}
+.suivi .sv-note{margin-top:5px;color:var(--ink);font-weight:500}
+.suivi.sv-new{border-left-color:#94a3b8}
+.suivi.sv-vu{border-left-color:var(--steel)}
+.suivi.sv-cours{border-left-color:#b45309}
+.suivi.sv-ok{border-left-color:#16a34a}
+.suivi.sv-ok b{color:#15803d}
 </style>
 </head>
 <body>
@@ -844,7 +856,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="msg-form">
       <div id="emojiPanel" style="display:none;flex-wrap:wrap;gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);max-height:200px;overflow-y:auto;z-index:50"></div>
       <button type="button" class="emoji-btn" onclick="toggleEmojiPanel()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
-      <textarea id="msgInput" rows="1" placeholder="Écrire un message…"></textarea>
+      <textarea id="msgInput" rows="1" placeholder="Écrire un message…" oninput="ajusterMsgInput()"></textarea>
       <button type="button" class="urg-btn" id="msgUrgent" onclick="toggleUrgent()" aria-label="Marquer comme important" title="Important"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/></svg></button>
       <button class="msg-send" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
     </div>
@@ -964,6 +976,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="sig-wrap"><canvas id="rapSig"></canvas><button type="button" class="sig-clear" onclick="clearSig()">Effacer</button></div>
       <button class="save-btn" style="margin-top:16px" onclick="saveRap()">Envoyer le rapport</button>
     </div>
+    <div class="sub-lbl" style="margin-top:18px">Mes rapports précédents</div>
+    <div id="rapHist"></div>
   </section>
 
   <!-- ÉTAT DES LIEUX -->
@@ -1110,6 +1124,16 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 const firebaseConfig={apiKey:"AIzaSyDr9V2XYcQYz9qS7RTGDcLL3gsJSeCn6g8",authDomain:"gcs-bts-prod.firebaseapp.com",projectId:"gcs-bts-prod",messagingSenderId:"954657002656",appId:"1:954657002656:web:2aadba3f1ff8b9691d25c5"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
+/* Les telephones sont sur le reseau mobile Orange, pas sur le reseau CHU :
+   le canal WebChannel de Firestore y passe normalement. Ce reglage est un
+   AUTO-detecteur, pas un forcage — il garde le WebChannel tant que la
+   poignee de main reussit, et ne bascule en long polling que sur les reseaux
+   qui le coupent : wifi d'etablissement, partages de connexion filtres,
+   relais d'operateur capricieux. Il ne coute donc rien en 4G normale et
+   evite l'accuse de reception qui ne revient jamais ailleurs.
+   A declarer AVANT toute lecture ou ecriture : le SDK refuse ce reglage une
+   fois la premiere requete partie. */
+try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch(e){}
 /* ──────────────────────────────────────────────────────────────────────────
    Chauffeurs BTS — v47 (31/07/2026)
    Contrôle écosystème : aucune fiche de poste utilisée, aucun reliquat Google
@@ -1117,11 +1141,43 @@ const db=firebase.firestore();
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v72';
+const APP_VERSION='v78';
+/* ==========================================================================
+   JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
+   Chacune desactive UN controle, avec sa raison. A relire avant de les
+   reconduire : une justification qui n'est plus vraie est pire que le
+   defaut qu'elle couvre.
+
+   LABEL-JUSTIFIE: Persistance Firestore desactivee — seule application qui
+   travaille hors du batiment ; sans la file locale, une depose validee au
+   sous-sol disparait si le telephone ferme l'application avant le retour du
+   reseau. Le blocage du 11/09 concernait une tablette fixe, pas celle-ci.
+   synchronizeTabs a ete retire et le long polling active.
+
+   LABEL-JUSTIFIE: Rattrapage protege contre la reentrance — retryGeo enchaine
+   stopGeo() puis startGeo() ; stopGeo annule la surveillance en cours, donc
+   deux appels simultanes donnent le meme resultat qu'un seul. Un verrou
+   n'ajouterait rien.
+
+   LABEL-JUSTIFIE: Aucune lecture unitaire en boucle — la boucle signalee
+   parcourt les tournees du chauffeur, soit une ou deux au maximum, sur des
+   documents deja en memoire. Aucune lecture Firestore n'y est declenchee.
+
+   LABEL-JUSTIFIE: Ecritures en serie groupees (batch) — la boucle signalee
+   ecrit un document par tour de camion, au plus deux par jour. Un batch
+   compliquerait le code pour economiser une ecriture.
+   ========================================================================== */
 /* APPS_SCRIPT_URL retirée le 31/07/2026 : constante vide jamais utilisée. L'envoi de photos passe par PHOTO_API. */
 try{var _av=document.getElementById('appVer');if(_av)_av.textContent=APP_VERSION;}catch(e){}
-// Cache offline Firestore : moins de reads répétés + prépare le mode hors-ligne de l'APK
-db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+/* Cache offline Firestore : moins de lectures repetees, et surtout les
+   ecritures survivent a la fermeture de l'application. C'est ce qui protege
+   les deposes validees en zone blanche — un chauffeur au sous-sol d'un CHU
+   qui remonte ensuite. Sans persistance, ces ecritures ne vivent qu'en
+   memoire et disparaissent si le telephone ferme l'application.
+   `synchronizeTabs` a ete RETIRE le 09/09/2026 : c'est la cause connue des
+   files d'ecriture gelees, et il n'a aucun objet ici — une PWA installee
+   n'ouvre jamais deux onglets. */
+db.enablePersistence().catch(()=>{});
 
 /* --------------------------------------------------------------------------
    ECRITURES FIRESTORE : garde-fou hors ligne
@@ -1548,9 +1604,12 @@ function checkUnclosedDays(){
   // mais il n'est atteignable que par le menu, donc rarement present. Sans la
   // prise de poste, l'alerte ne se declenchait quasiment jamais.
   Promise.all([
-    db.collection('chauffeurs_prise_poste').where('date','in',dates).get(),
-    db.collection('chauffeurs_edl').where('date','in',dates).get(),
-    db.collection('chauffeurs_checklist_fin').where('date','in',dates).get()
+    // limit(200) : ces requetes lisent les documents de TOUS les chauffeurs sur
+    // 3 jours, puis filtrent cote client. Une soixantaine de documents
+    // aujourd'hui, mais rien ne les bornait si la flotte grandit.
+    db.collection('chauffeurs_prise_poste').where('date','in',dates).limit(200).get(),
+    db.collection('chauffeurs_edl').where('date','in',dates).limit(200).get(),
+    db.collection('chauffeurs_checklist_fin').where('date','in',dates).limit(200).get()
   ]).then(([ppS,edlS,finS])=>{
     const mine=S.chauffeur.id, fins=new Set();
     finS.forEach(d=>{const x=d.data();if(x.chauffeur===mine)fins.add(x.date+'_'+x.vehicule);});
@@ -1723,6 +1782,63 @@ function confirmVehicule(){
   pickVehicule(copie);
 }
 
+/* Ecoute des statuts du jour, extraite de pickVehicule pour pouvoir etre
+   rattachee au reveil de l'application (voir la mise en veille plus bas). */
+var _statutsNums=null;
+function attachStatuts(nums){
+  if(nums&&nums.length)_statutsNums=nums.slice();
+  var _n=_statutsNums;
+  if(!_n||!_n.length)return;
+  if(S.unsub)S.unsub();
+  var ids=_n.map(function(n){return TODAY+'_T'+n;});
+  S.statuts={};
+  S.unsub=db.collection('chauffeurs_tournees_statuts')
+    .where(firebase.firestore.FieldPath.documentId(),'in',ids)
+    .onSnapshot(function(snap){
+      snap.forEach(function(d){S.statuts[d.id]=d.data();});
+      renderJournee();
+      if(isOn('hub'))renderHub();
+    },function(err){console.warn('statuts',err);renderJournee();});
+}
+/* ==========================================================================
+   MISE EN VEILLE DES ECOUTES EN ARRIERE-PLAN
+   Le telephone passe la journee en poche, ecran eteint, application ouverte.
+   Les ecoutes y recoivent chaque changement et consomment des lectures pour
+   un ecran que personne ne regarde.
+
+   DELAI DE 5 MINUTES, volontairement. Rattacher coute une relecture de
+   l'instantane initial : sur un chauffeur qui rallume son ecran toutes les
+   deux minutes a chaque arret, un detachement immediat depenserait PLUS
+   qu'en laissant les ecoutes en place. Le gain n'existe que sur une absence
+   longue — conduite entre deux sites, pause.
+   ========================================================================== */
+var VEILLE_MS=5*60*1000, _veilleT=null, _enVeille=false;
+// Coupe les trois ecoutes de l'application : statuts du jour, messages, alertes.
+function couperEcoutes(){
+  if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
+  detachMessages(); detachAlertes();
+}
+function reveillerEcoutes(){
+  if(!_enVeille)return;
+  _enVeille=false;
+  if(!S.chauffeur)return;
+  attachStatuts(null);
+  attachMessages();
+  attachAlertes();
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){
+    if(_veilleT)clearTimeout(_veilleT);
+    _veilleT=setTimeout(function(){
+      if(!document.hidden||_enVeille)return;
+      couperEcoutes();
+      _enVeille=true;
+    },VEILLE_MS);
+  }else{
+    if(_veilleT){clearTimeout(_veilleT);_veilleT=null;}
+    reveillerEcoutes();
+  }
+});
 async function pickVehicule(id){
   S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
@@ -1760,16 +1876,7 @@ async function pickVehicule(id){
   });
 
   // listener temps réel sur les statuts du jour (1 doc / tournée)
-  if(S.unsub)S.unsub();
-  const ids=nums.map(n=>TODAY+'_T'+n);
-  S.statuts={};
-  S.unsub=db.collection('chauffeurs_tournees_statuts')
-    .where(firebase.firestore.FieldPath.documentId(),'in',ids)
-    .onSnapshot(snap=>{
-      snap.forEach(d=>{S.statuts[d.id]=d.data();});
-      renderJournee();
-      if(isOn('hub'))renderHub();
-    },err=>{console.warn('statuts',err);renderJournee();});
+  attachStatuts(nums);
 
   (S.vehicule.tournees||[]).forEach(function(_tn){
     if(!_tn)return;
@@ -3477,6 +3584,18 @@ function insertEmoji(e){
   var s=ta.selectionStart||0,end=ta.selectionEnd||0;
   ta.value=ta.value.slice(0,s)+e+ta.value.slice(end);
   var pos=s+e.length;ta.focus();try{ta.setSelectionRange(pos,pos);}catch(_){}
+  ajusterMsgInput();
+}
+/* Le champ de message etait fige sur une ligne : au-dela, le texte defilait
+   et le chauffeur ne voyait plus que la fin de ce qu'il ecrivait. Le
+   max-height de 90 px attendait cette croissance, jamais cablee.
+   On remet la hauteur a zero avant de lire scrollHeight, sinon le champ ne
+   peut que grandir et ne redescend jamais quand on efface. */
+function ajusterMsgInput(){
+  var ta=document.getElementById('msgInput');if(!ta)return;
+  ta.style.height='auto';
+  ta.style.height=Math.min(ta.scrollHeight,90)+'px';
+  ta.style.overflowY=(ta.scrollHeight>90)?'auto':'hidden';
 }
 /* Message important : s'affiche en popup bloquante chez le destinataire,
    dans les deux sens (responsable -> chauffeur et chauffeur -> responsable). */
@@ -3490,7 +3609,7 @@ function toggleUrgent(){
 async function sendMessage(){
   const inp=document.getElementById('msgInput'),txt=(inp.value||'').trim();
   if(!txt||!S.msgTo)return;
-  inp.value='';
+  inp.value=''; ajusterMsgInput();   // le champ redescend a une ligne
   const urgent=_msgUrgent;
   _msgUrgent=false;
   const _ub=document.getElementById('msgUrgent'); if(_ub)_ub.classList.remove('on');
@@ -3501,7 +3620,7 @@ async function sendMessage(){
       to:S.msgTo, text:txt, vehicule:S.vehicule?S.vehicule.id:null, at:Date.now(),
       important:urgent||false, lus:{}
     });
-  }catch(e){uiToast('Envoi impossible','err');inp.value=txt;}
+  }catch(e){uiToast('Envoi impossible','err');inp.value=txt;ajusterMsgInput();}
 }
 function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); if(S.msgReturn==='veh'){S.msgReturn=null;go('veh');updateVehMsgBadge();return;} go('hub'); renderHub(); }
 function openMessagesPreDemarrage(){ S.msgReturn='veh'; openMessages(); }
@@ -3986,6 +4105,28 @@ function driveThumb(u, size){
   else { const g=s.match(/[\w-]{25,}/); if(g) id=g[0]; }
   return id ? ('https://drive.google.com/thumbnail?id='+id+'&sz=w'+(size||400)) : s;
 }
+/* ==========================================================================
+   SUIVI DU TRAITEMENT PAR LE RESPONSABLE
+   Le chauffeur voyait sa declaration, jamais la reponse : il ne savait pas si
+   elle avait ete lue, ni ce qui en avait ete fait. Le responsable ecrit
+   pourtant `statut`, `traitePar`, `traiteAt` et sa note de traitement.
+   `note` est le champ du responsable ; la description du chauffeur vit dans
+   `description` — les deux ne se recouvrent pas.
+   ========================================================================== */
+function suiviRow(r){
+  var st=r.statut||'Nouveau';
+  var cls='sv-new', txt='Transmis \u2014 en attente';
+  if(st==='Vu'){ cls='sv-vu'; txt='Vu par le responsable'; }
+  else if(st==='En cours'){ cls='sv-cours'; txt='Pris en charge'; }
+  else if(st==='Trait\u00e9'){ cls='sv-ok'; txt='Trait\u00e9'; }
+  var qui=r.traitePar||r.statutPar||'';
+  var quand=r.traiteAt||r.statutAt||0;
+  var d=quand?new Date(quand).toLocaleDateString('fr-FR')+' \u00e0 '+new Date(quand).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  return '<div class="suivi '+cls+'"><b>'+txt+'</b>'
+    + ((qui||d)?'<span>'+esc(qui)+(qui&&d?' \u00b7 ':'')+d+'</span>':'')
+    + (r.note?'<div class="sv-note">'+esc(r.note)+'</div>':'')
+    + '</div>';
+}
 function anoRow(r){
   const ph=(r.photos||[]).filter(Boolean).map(u=>typeof u==='string'?u:(u&&u.url)||'').filter(Boolean);
   const thumbs=ph.length?'<div class="ano-ph">'+ph.map(u=>`<img src="${driveThumb(u,300)}" loading="lazy" onclick="window.open('${driveThumb(u,1600)}','_blank')">`).join('')+'</div>':'';
@@ -3993,7 +4134,7 @@ function anoRow(r){
     <div class="h1"><b><span class="htype">${r.nature||'Anomalie'}</span>${r.site?(''+r.site).replace(/</g,'&lt;'):''}</b><span class="dt">${frDate(r)}</span></div>
     ${r.description?`<div class="meta">${(''+r.description).replace(/</g,'&lt;')}</div>`:''}
     <div class="meta">Signalé par ${r.chauffeurNom||'—'}</div>
-    ${thumbs}</div>`;
+    ${thumbs}${suiviRow(r)}</div>`;
 }
 async function renderAnoHist(){
   const box=document.getElementById('anoHist');
@@ -4032,6 +4173,29 @@ function openRap(){
   _sigDirty=false;
   go('rapport');
   setTimeout(function(){initSig('rapSig');},80);
+  renderRapHist();
+}
+/* Historique des rapports du chauffeur, avec le suivi du responsable.
+   Meme bornage que les autres : 6 derniers mois, 15 plus recents. */
+function rapRow(r){
+  var ph=(r.photos||[]).filter(Boolean).map(function(u){return typeof u==='string'?u:((u&&u.url)||'');}).filter(Boolean);
+  var thumbs=ph.length?'<div class="ano-ph">'+ph.map(function(u){
+      return '<img src="'+driveThumb(u,300)+'" loading="lazy" onclick="window.open(\''+driveThumb(u,1600)+'\',\'_blank\')">';
+    }).join('')+'</div>':'';
+  return '<div class="glass hist-row">'
+    + '<div class="h1"><b><span class="htype">Rapport</span>'+esc(r.objet||'')+'</b><span class="dt">'+frDate(r)+'</span></div>'
+    + (r.description?'<div class="meta">'+esc(r.description)+'</div>':'')
+    + '<div class="meta">Déposé par '+esc(r.chauffeurNom||'\u2014')+(r.signature?' \u00b7 signé':'')+'</div>'
+    + thumbs + suiviRow(r) + '</div>';
+}
+async function renderRapHist(){
+  var box=document.getElementById('rapHist');
+  if(!box)return;
+  box.innerHTML='<div class="msg-empty">Chargement…</div>';
+  try{
+    var rows=await histQuery('chauffeurs_rapports',15);
+    box.innerHTML=rows.length?rows.map(rapRow).join(''):'<div class="msg-empty">Aucun rapport déposé</div>';
+  }catch(e){console.warn('rap hist',e);box.innerHTML='<div class="msg-empty">Lecture impossible</div>';}
 }
 async function saveRap(){
   const objet=(document.getElementById('rapObjet').value||'').trim();
