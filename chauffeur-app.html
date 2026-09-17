@@ -695,6 +695,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="boot-wrap">
       <div class="avatar boot-ava" id="bootAva">?</div>
       <h1 class="boot-hi" id="bootHi">Salut</h1>
+      <p class="boot-sub" id="bootDate"></p>
       <p class="boot-sub">Je suis prêt dans 5 secondes…</p>
       <div class="boot-track"><div class="boot-bar" id="bootBar"></div></div>
       <div class="boot-checks">
@@ -933,7 +934,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="glass form-card">
       <div id="finChk"></div>
       <div id="finAno"></div>
-      <div class="sub-lbl" style="margin-top:14px">Tableau de bord (2 photos max)</div>
+      <div class="sub-lbl" style="margin-top:14px">Tableau de bord (3 photos max)</div>
       <input type="file" id="finFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('fin',this,'finThumbs')">
       <button type="button" class="photo-btn" onclick="document.getElementById('finFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Photographier le tableau de bord</button>
       <div class="thumbs" id="finThumbs"></div>
@@ -1141,7 +1142,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v78';
+const APP_VERSION='v80';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1575,14 +1576,68 @@ function setBootCheck(id,ok,txt){
   el.classList.remove('ok','ko');if(ok===true)el.classList.add('ok');else if(ok===false)el.classList.add('ko');
   const st=document.getElementById('boot'+id+'St');if(st)st.textContent=txt;
 }
+/* ==========================================================================
+   CONTROLE DE LA DATE DU TELEPHONE
+
+   `TODAY` vient de l'horloge du telephone, et il decide de tout : quels
+   arrets s'affichent (arrets_par_jour[jour]), l'identifiant des documents
+   de statut ({date}_T{tournee}), la cloture, la prise de poste. Un telephone
+   a la mauvaise date fait travailler le chauffeur sur la tournee d'un autre
+   jour, sans qu'aucun ecran ne s'en apercoive.
+
+   On ne DEMANDE pas au chauffeur de confirmer la date : confirmer ne change
+   pas l'horloge, et le laisser la saisir creerait des documents sous une
+   fausse date, melanges aux vrais. On COMPARE donc avec l'heure du serveur,
+   et on bloque si l'ecart depasse une journee.
+
+   Le releve se fait par une ecriture sur le document de version, deja ecrit
+   a chaque connexion : aucune lecture ni ecriture supplementaire. La valeur
+   `serverTimestamp()` est resolue par Firestore, pas par le telephone.
+   Hors reseau, la promesse ne se resout pas : le controle est alors
+   simplement saute — mieux vaut laisser travailler qu'immobiliser un
+   chauffeur pour une verification impossible.
+   ========================================================================== */
+const DATE_ECART_MAX = 20*3600*1000;   // 20 h : tolere les fuseaux, pas un jour d'ecart
+async function verifierDateServeur(){
+  if(!S.chauffeur) return;
+  try{
+    const ref = db.collection('chauffeurs_app_versions').doc(S.chauffeur.id);
+    await ref.set({ horodatageServeur: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    const snap = await ref.get({ source:'server' });
+    const ts = snap.exists ? snap.get('horodatageServeur') : null;
+    if(!ts || !ts.toDate) return;
+    const serveur = ts.toDate();
+    const ecart = Math.abs(serveur.getTime() - Date.now());
+    if(ecart < DATE_ECART_MAX) return;
+    const dServeur = serveur.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    const dTel = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+    await uiAlert('Date du téléphone incorrecte',
+      'Ton téléphone est au ' + dTel + ', alors que nous sommes le ' + dServeur + '.\n\n'
+      + 'Tu verrais la tournée d\'un autre jour. Corrige la date dans les réglages '
+      + 'du téléphone — active le réglage automatique — puis rouvre l\'application.');
+    // On ne laisse pas passer : toute saisie partirait sous une fausse date.
+    couperEcoutes();
+    document.getElementById('loadTxt').textContent = 'Corrige la date du téléphone, puis rouvre l\'application.';
+    go('load');
+  }catch(e){ console.warn('date serveur', e); }   // hors reseau : controle saute
+}
 function showBoot(done){
   const p=(S.chauffeur&&S.chauffeur.prenom)||'';
   document.getElementById('bootAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('bootHi').textContent='Salut '+p;
+  /* La date en clair : un chauffeur remarque immediatement si son telephone
+     s'est trompe de jour. C'est le repere visuel — le garde-fou reel, lui,
+     est la comparaison avec l'heure du serveur (verifierDateServeur). */
+  try{
+    var _d=new Date(TODAY+'T12:00:00');
+    document.getElementById('bootDate').textContent =
+      _d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  }catch(e){}
   setBootCheck('Net',null,'…');setBootCheck('Gps',null,'…');
   const bar=document.getElementById('bootBar');bar.style.transition='none';bar.style.width='0%';
   go('boot');
   // vérifs en arrière-plan — gratuites, aucune lecture Firebase
+  verifierDateServeur();
   setBootCheck('Net',navigator.onLine,navigator.onLine?'OK':'Hors ligne');
   window.addEventListener('online',()=>setBootCheck('Net',true,'OK'),{once:true});
   if(navigator.geolocation){
@@ -1843,7 +1898,11 @@ async function pickVehicule(id){
   S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('jourVeh').textContent=S.vehicule.id;
-  document.getElementById('jourSub').textContent='Ma journée · '+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t))).join(' puis ');
+  /* Le jour en tete de la tournee : depuis que la composition varie selon le
+     jour de semaine, un chauffeur doit pouvoir constater d'un coup d'oeil
+     quelle journee il est en train de faire. */
+  var _jr=''; try{ _jr=new Date(TODAY+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){}
+  document.getElementById('jourSub').textContent=(_jr?_jr+' · ':'')+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t))).join(' puis ');
   go('load');document.getElementById('loadTxt').textContent='Chargement de la tournée…';
 
   // Tournées retenues : servies depuis TOURNEES_REF (chargé au démarrage).
@@ -3890,28 +3949,71 @@ async function saveEntretien(){
    ou le chauffeur declare l'entretien de son camion, au moment ou il cloture.
    `quand` limite l'affichage d'un point a un jour precis (0=dim … 6=sam) ;
    `tournee` le limite a une tournee donnee (par numero, pas par identifiant :
-   la reforme concerne la T82 quel que soit le camion qui l'assure).
+   la reforme concerne la T82 quel que soit le camion qui l'assure) ;
+   `mensuel` le limite au debut et a la fin du mois.
+
+   LAVAGE EXTERIEUR — passe du jeudi hebdomadaire a deux fois par mois
+   (16/09/2026, demande d'Eric).
+   Pas de date fixe : un 1er qui tombe un dimanche, et personne n'est
+   interroge. On ouvre donc deux FENETRES de cinq jours, du 1er au 5 et les
+   cinq derniers jours du mois, ce qui garantit plusieurs jours travailles
+   dans chacune.
+   Et on cesse de demander des que le camion a ete declare lave dans la
+   fenetre en cours : sans cela le chauffeur repondrait cinq fois, et les
+   quatre refus gonfleraient les non-conformites de l'audit qualite.
    -------------------------------------------------------------------------- */
 const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
-  {id:'caisse_ext', label:'Lavage extérieur',           quand:4},
+  {id:'caisse_ext', label:'Lavage extérieur',           mensuel:true},
   {id:'cabine',     label:'Nettoyage intérieur cabine'}
 ];
+const FEN_JOURS=5;   // largeur de chaque fenetre, en jours
+/* Fenetre mensuelle en cours, ou null hors fenetre. Renvoie les bornes en
+   date ISO pour interroger les clotures. */
+function fenetreMois(d){
+  d=d||new Date();
+  const jour=d.getDate();
+  const dernier=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  const iso=n=>isoLocal(new Date(d.getFullYear(), d.getMonth(), n));
+  if(jour<=FEN_JOURS)            return {debut:iso(1), fin:iso(FEN_JOURS), quoi:'début'};
+  if(jour>dernier-FEN_JOURS)     return {debut:iso(dernier-FEN_JOURS+1), fin:iso(dernier), quoi:'fin'};
+  return null;
+}
+/* Vrai si ce camion a deja ete declare lave dans la fenetre en cours.
+   Une seule lecture, et uniquement pendant les deux fenetres. */
+var _extFait=false;
+async function majLavageExterieur(){
+  _extFait=false;
+  const f=fenetreMois();
+  if(!f||!S.vehicule)return;
+  try{
+    const q=await db.collection('chauffeurs_checklist_fin')
+      .where('date','>=',f.debut).where('date','<=',f.fin).limit(60).get();
+    q.forEach(function(d){
+      const x=d.data();
+      if(x.vehicule===S.vehicule.id && x.items && x.items['Lavage extérieur']===true) _extFait=true;
+    });
+  }catch(e){ console.warn('lavage ext', e); }   // hors reseau : on demande, c'est le moins risque
+}
 // Points affiches aujourd'hui, selon le jour et les tournees du chauffeur.
 function finItems(){
   const j=new Date().getDay();
   const nums=(S.tournees||[]).map(t=>String(t.numero));
   return FIN_ITEMS.filter(function(it){
     if(it.quand!=null && it.quand!==j) return false;
+    if(it.mensuel && (!fenetreMois() || _extFait)) return false;
     if(it.tournee && nums.indexOf(String(it.tournee))<0) return false;
     return true;
   });
 }
-function openFin(){
+async function openFin(){
   document.getElementById('finVeh').textContent=S.vehicule.id;
   document.getElementById('finNote').value='';
   PH['fin']=[];renderThumbs('fin','finThumbs');
   finAnomalies();
+  // Le lavage exterieur n'est demande qu'en debut et fin de mois, et une
+  // seule fois par fenetre : on verifie avant d'afficher la liste.
+  await majLavageExterieur();
   document.getElementById('finChk').innerHTML=finItems().map(it=>`
     <div class="chk-row" data-id="${it.id}"><span class="lbl">${esc(it.label)}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
@@ -4044,7 +4146,10 @@ function compressPhoto(file,maxW,q){
     r.readAsDataURL(file);
   });
 }
-const PH_MAX={edl:3,pp:3,fin:2};
+/* Plafonds de photos par type de saisie. La cloture est passee de 2 a 3
+   le 16/09/2026 : le tableau de bord seul ne suffisait pas a documenter
+   l'etat du camion en fin de journee. */
+const PH_MAX={edl:3,pp:3,fin:3};
 async function addPhotos(bucket,input,thumbsId){
   PH[bucket]=PH[bucket]||[];
   const max=PH_MAX[bucket]||6;
