@@ -1147,7 +1147,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v81';
+const APP_VERSION='v82';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -3708,7 +3708,8 @@ function attachAlertes(){
   if(_alUnsub)return;
   S.alertes=S.alertes||[];
   _alUnsub=db.collection('chauffeurs_alertes').orderBy('at','desc').limit(6).onSnapshot(snap=>{
-    S.alertes=snap.docs.map(d=>d.data());
+    // L'identifiant du document est conserve : il sert au suivi de traitement.
+    S.alertes=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
     if(isOn('alertes')){paintAlertes();if(S.alertes.length)markAlSeen(S.alertes[0].at);}
     else if(isOn('hub'))renderHub();
   },e=>console.warn('alertes listener',e));
@@ -3720,7 +3721,8 @@ function paintAlertes(){
   el.innerHTML=rows.length?rows.map(r=>`<div class="glass hist-row">
       <div class="h1"><b>${esc(r.type||'')}</b><span class="dt">${frDate(r)}</span></div>
       ${r.message?`<div class="meta">${(r.message||'').replace(/</g,'&lt;')}</div>`:''}
-      <div class="meta" style="opacity:.7">${(r.fromName||'').trim()||'Chauffeur'}${r.vehicule?' · '+r.vehicule:''}</div></div>`).join(''):'<div class="msg-empty">Aucune alerte</div>';
+      <div class="meta" style="opacity:.7">${(r.fromName||'').trim()||'Chauffeur'}${r.vehicule?' · '+r.vehicule:''}</div>
+      ${suiviRow(r)}</div>`).join(''):'<div class="msg-empty">Aucune alerte</div>';
 }
 function renderAlertes(){
   document.getElementById('alText').value='';
@@ -4169,6 +4171,10 @@ async function addPhotos(bucket,input,thumbsId){
   const files=Array.from(input.files||[]);
   for(const f of files){
     if(PH[bucket].length>=max){uiToast(max+' photos maximum','err');break;}
+    /* `type:bucket` sert a l'affichage local des vignettes. Il ne doit JAMAIS
+       partir tel quel vers l'Apps Script, qui n'accepte que 'photo',
+       'tableau_bord' et 'signature' : un type inconnu est ignore et la photo
+       n'arrive jamais. Chaque appel a uploadPhotos() normalise donc le type. */
     try{const data=await compressPhoto(f);PH[bucket].push({data,type:bucket});}catch(e){}
   }
   input.value='';
@@ -4276,7 +4282,7 @@ async function saveAno(){
     const ref=db.collection('chauffeurs_anomalies').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()}));
     let urls=[];
-    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos);if(urls.length)await fbWrite(ref.update({photos:urls}));}
+    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos.map(p=>({data:p.data,type:'photo'})));if(urls.length)await fbWrite(ref.update({photos:urls}));}
     uiToast(!photos.length?fbMsg(_r,'Anomalie signalée'):(urls.length?'Anomalie + photos envoyées':fbMsg(_r,'Anomalie envoyée (photos non transmises)')),(!photos.length||urls.length)?'ok':'err');
     openAno();
   }catch(e){uiToast('Échec envoi','err');}
@@ -4328,7 +4334,7 @@ async function saveRap(){
     const ref=db.collection('chauffeurs_rapports').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
     let urls=[];
-    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('rapports',ref.id,photos);if(urls.length)await fbWrite(ref.update({photos:urls}));}
+    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('rapports',ref.id,photos.map(p=>({data:p.data,type:'photo'})));if(urls.length)await fbWrite(ref.update({photos:urls}));}
     if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');const su=await uploadPhotos('rapports',ref.id,[{data:sig,type:'signature'}]);if(su.length)await fbWrite(ref.update({signature:su[0].url}));}catch(e){}}
     uiToast(!photos.length?fbMsg(_r,'Rapport envoyé'):(urls.length?'Rapport + photos envoyés':fbMsg(_r,'Rapport envoyé (photos non transmises)')),(!photos.length||urls.length)?'ok':'err');
     openRap();
