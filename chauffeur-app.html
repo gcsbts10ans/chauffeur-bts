@@ -658,6 +658,11 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 .suivi.sv-cours{border-left-color:#b45309}
 .suivi.sv-ok{border-left-color:#16a34a}
 .suivi.sv-ok b{color:#15803d}
+/* Numero du QR colle sur site, rappele a cote du client quand il ne
+   correspond pas au rang de passage. Discret : le chauffeur suit les rangs,
+   le QR ne sert qu'a retrouver la bonne etiquette. */
+.qr-n{margin-left:7px;font-size:10.5px;font-weight:700;color:#94a3b8;
+  background:rgba(148,163,184,.14);padding:1px 6px;border-radius:6px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -1142,7 +1147,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v80';
+const APP_VERSION='v81';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -2031,15 +2036,23 @@ function renderJournee(){
   S.tournees.forEach(t=>{
     html+=`<div class="tgroup"><span>${esc(tLabel(t))}</span><span class="hr"></span>${(t.arrets||[]).length>1?`<button class="route-btn" onclick="openCarteTour('${t.tid}')"><svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v16M15 6v16"/></svg>Itinéraire</button><button class="route-btn" onclick="routeTournee('${t.tid}')"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Maps</button>`:''}<span>${(t.arrets||[]).length} arrêts</span></div>`;
     html+='<div class="rail">';
+    /* La pastille affiche le RANG DE PASSAGE (1, 2, 3...), pas `a.ordre`.
+       `a.ordre` est le numero du QR colle sur site : il ne bouge jamais quand
+       le responsable reorganise une tournee, ce qui donnait des listes
+       numerotees 1, 4, 3, 6, 5 — correctes, mais qui ressemblent a un bug
+       pour le chauffeur. Le numero de QR reste affiche en dessous du client
+       quand il differe du rang, pour retrouver la bonne etiquette sur place. */
+    let _rang=0;
     (t.arrets||[]).slice().sort(bySeq).forEach(a=>{
-      total++;
+      total++; _rang++;
       const st=statutArret(t.tid,a.ordre);
       let cls,dot;
       if(st&&st.ok){done++;cls='rdone';dot='<div class="dot done">&#10003;</div>';}
-      else if(!curSet){curSet=true;curLabel=a.client;cls='cur';dot=`<div class="dot now">${a.ordre}</div>`;}
-      else {cls='';dot=`<div class="dot next">${a.ordre}</div>`;}
+      else if(!curSet){curSet=true;curLabel=a.client;cls='cur';dot=`<div class="dot now">${_rang}</div>`;}
+      else {cls='';dot=`<div class="dot next">${_rang}</div>`;}
+      const _qr=(a.ordre!=null&&a.ordre!==_rang)?`<span class="qr-n">QR ${a.ordre}</span>`:'';
       html+=`<div class="glass stop ${cls}" onclick="openStop('${t.tid}',${a.ordre})">
-        ${dot}<div class="stop-info"><b>${esc(a.client)}</b><div class="a">${esc(a.adresse||'')}</div></div>
+        ${dot}<div class="stop-info"><b>${esc(a.client)}${_qr}</b><div class="a">${esc(a.adresse||'')}</div></div>
         ${a.acces?`<span class="acc">${esc(a.acces)}</span>`:''}</div>`;
     });
     html+='</div>';
@@ -2080,7 +2093,7 @@ function openStop(num,ordre){
   document.getElementById('detBody').innerHTML=`
     ${doneBanner}
     <div class="glass det-card">
-      <div class="num">T${num} · Arrêt ${ordre} / ${(t.arrets||[]).length}</div>
+      <div class="num">T${num} · Arrêt ${(t.arrets||[]).slice().sort(bySeq).findIndex(x=>x.ordre===ordre)+1} / ${(t.arrets||[]).length}${ordre!=null?` · QR ${ordre}`:''}</div>
       <h2>${esc(a.client)}</h2>
       <div class="det-row"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
         <div><div class="l">Adresse</div><div class="v">${esc(a.adresse||'—')}</div></div></div>
