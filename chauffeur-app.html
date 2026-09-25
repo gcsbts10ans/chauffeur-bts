@@ -1147,7 +1147,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v82';
+const APP_VERSION='v83';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -2089,7 +2089,7 @@ function openStop(num,ordre){
   const st=statutArret(num,ordre);
   const doneBanner=st&&st.ok?(st.ferme?`<div class="done-banner" style="background:#f1f5f9;border-color:#cbd5e1;color:#475569"><svg viewBox="0 0 24 24" style="stroke:#475569"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
      Service fermé (temporaire)${st.motif?(' — '+(''+st.motif).replace(/</g,'&lt;')):''}</div>`:`<div class="done-banner"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-     Dépose validée ${st.mode==='qr'?'(QR scanné)':st.mode==='photo'?'(photo)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}${(st.passages&&st.passages.length)?('<div style="font-size:12px;font-weight:600;margin-top:5px;opacity:.85">+ '+st.passages.length+' repassage'+(st.passages.length>1?'s':'')+' \u00b7 '+st.passages.map(function(p){return p.at?new Date(p.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';}).join(', ')+'</div>'):''}</div>`):'';
+     Dépose validée ${st.mode==='qr'?'(QR scanné)':st.mode==='photo'?'(photo)':'(manuel)'} — ${st.at?new Date(st.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}${(st.passages&&st.passages.length)?('<div style="font-size:12px;font-weight:600;margin-top:5px;opacity:.85">+ '+st.passages.length+' repassage'+(st.passages.length>1?'s':'')+' \u00b7 '+st.passages.map(function(p){return p.at?new Date(p.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';}).join(', ')+'</div>'):''}${st.rollsCorrigesAt?('<div style="font-size:12px;font-weight:600;margin-top:5px;opacity:.85">Rolls corrigés à '+new Date(st.rollsCorrigesAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' \u00b7 '+(st.rollsDeposes||0)+' déposés / '+(st.rollsRecuperes||0)+' récupérés</div>'):''}</div>`):'';
   document.getElementById('detBody').innerHTML=`
     ${doneBanner}
     <div class="glass det-card">
@@ -2106,6 +2106,7 @@ function openStop(num,ordre){
     </div>
     ${validLL(a)?`<button class="nav-btn" onclick="cGoToStop('${num}',${ordre})"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (guidage)</button>`:(a.adresse?`<a class="nav-btn" href="${mapsTo(a.adresse)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (Maps)</a>`:'')}
     ${st&&st.ok?`
+    <button class="manual" onclick="askCorrigerRolls()">Corriger les rolls</button>
     <button class="manual" onclick="askRepassage()">Repasser sur ce site (dépannage)</button>`:`
     <button class="scan-btn" onclick="scanStop('qr')"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M4 12h16"/></svg>
       <div><b>Scanner le QR du site</b><span>Valider la dépose chez l'adhérent</span></div></button>
@@ -2176,6 +2177,48 @@ async function repasserArret(num,ordre,client,rolls){
     go('jour');
   }catch(e){ uiToast('Erreur enregistrement','err'); }
 }
+/* ==========================================================================
+   CORRECTION DES ROLLS D'UN CLIENT DEJA VALIDE
+   En SPL, le chauffeur decroche la remorque, livre d'autres clients en
+   porteur, puis revient chercher le sale. Le seul moyen d'ajouter des rolls
+   etait « Repasser sur ce site (depannage) » : un retour prevu s'enregistrait
+   donc comme un depannage qui n'en etait pas un.
+
+   Ici on CORRIGE le total : les nouveaux chiffres remplacent les anciens,
+   sans creer de passage. Le premier passage garde son heure.
+   Limite au jour meme par construction : la fiche ne s'ouvre que sur la
+   tournee du jour, dont le document de statut porte la date.
+   Trace : heure, chauffeur, anciennes et nouvelles valeurs dans
+   `corrections[]`, et `rollsCorrigesAt` pour l'affichage responsable. Les
+   rolls servent au calcul de charge et au suivi des volumes : une
+   modification silencieuse serait indefendable en audit.
+   ========================================================================== */
+async function askCorrigerRolls(){
+  const {num,ordre,a}=S.curStop;
+  const st=statutArret(num,ordre)||{};
+  const r=await demandeRolls(a.client,null,(st.format||a.format),{
+    deposes:(st.rollsDeposes||0), recuperes:(st.rollsRecuperes||0),
+    bouton:'Enregistrer la correction'});
+  if(!r)return;
+  if((r.deposes||0)===(st.rollsDeposes||0) && (r.recuperes||0)===(st.rollsRecuperes||0)){
+    uiToast('Aucun changement','ok'); return;
+  }
+  const base='arrets.'+ordre+'.';
+  const FV=firebase.firestore.FieldValue;
+  const maj={};
+  maj[base+'rollsDeposes']=r.deposes||0;
+  maj[base+'rollsRecuperes']=r.recuperes||0;
+  maj[base+'rollsCorrigesAt']=Date.now();
+  maj[base+'corrections']=FV.arrayUnion({at:Date.now(),
+    ancDeposes:(st.rollsDeposes||0), ancRecuperes:(st.rollsRecuperes||0),
+    deposes:(r.deposes||0), recuperes:(r.recuperes||0),
+    chauffeur:S.chauffeur.id, chauffeurNom:chNom()});
+  try{
+    var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).update(maj));
+    uiToast(fbMsg(_r,'Rolls corrigés — '+(a.client||'')),'ok');
+    go('jour');
+  }catch(e){ uiToast('Erreur enregistrement','err'); }
+}
 async function askRepassage(){
   const {num,ordre,a}=S.curStop;
   const ok=await uiConfirm('Repasser sur ce site',
@@ -2197,9 +2240,13 @@ async function askRepassage(){
    Renvoie {deposes, recuperes} ou null si le chauffeur annule.
    ========================================================================== */
 var _rollsCtx=null,_rollsRes=null;
-function demandeRolls(client,restants,format){
+/* `init` (facultatif) : { deposes, recuperes, bouton } — pre-remplit la
+   saisie et renomme le bouton. Sert a la correction des rolls d'un client
+   deja valide ; sans `init`, comportement d'origine. */
+function demandeRolls(client,restants,format,init){
   return new Promise(function(resolve){
-    _rollsCtx={deposes:0,recuperes:0,restants:(restants!=null?restants:null),
+    _rollsCtx={deposes:(init&&init.deposes)||0,recuperes:(init&&init.recuperes)||0,
+               restants:(restants!=null?restants:null),
                format:(format==='cabri'?'cabri':'roll')};
     _rollsRes=resolve;
     var ov=document.getElementById('rollsOv');
@@ -2221,7 +2268,7 @@ function demandeRolls(client,restants,format){
         +'<div class="chg-n"><b id="rollsRec">0</b><span>récupérés</span></div>'
         +'<button class="plus" onclick="rollsStep(\'recuperes\',1)" aria-label="Ajouter">+</button></div>'
         +'<div class="rolls-info" id="rollsInfo"></div>'
-        +'<button class="save-btn" style="margin-top:14px" onclick="rollsOk()">Valider la dépose</button>'
+        +'<button class="save-btn" id="rollsOkBtn" style="margin-top:14px" onclick="rollsOk()">Valider la dépose</button>'
         +'<div onclick="rollsCancel()" style="text-align:center;margin-top:12px;color:#6b7280;cursor:pointer;font-size:14px">Annuler</div>'
         +'</div>';
       document.body.appendChild(ov);
@@ -2234,6 +2281,8 @@ function demandeRolls(client,restants,format){
     if(_t)_t.textContent=(_fmt==='cabri')?'Cabris':'Rolls';
     var _l=document.getElementById('rollsLblDep');
     if(_l)_l.textContent=(_fmt==='cabri')?'Cabris déposés':'Propres déposés';
+    var _ob=document.getElementById('rollsOkBtn');
+    if(_ob)_ob.textContent=(init&&init.bouton)||'Valider la dépose';
     rollsPaint();
     ov.classList.add('on');
   });
