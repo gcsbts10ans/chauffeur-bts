@@ -732,6 +732,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div class="pick-label">Sélectionne ton nom</div>
       <div id="chaufList"></div>
       <div class="sig-bts">Eric TISSERAND — conception et réalisation</div>
+      <div class="sig-bts" id="loginVer" style="margin-top:2px"></div>
     </div>
   </section>
 
@@ -1147,7 +1148,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v83';
+const APP_VERSION='v84';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1511,7 +1512,9 @@ function renderChauffeurs(){
     <div class="fld"><label>Ton code à 6 chiffres</label><input id="chaufPwd" type="tel" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="••••••" oninput="chkLogin()" onkeydown="if(event.key==='Enter')confirmChauffeur()"></div>
     <div style="font-size:12.5px;color:var(--sub);line-height:1.5;margin:-4px 4px 12px;text-align:center">C'est le même code que pour ton planning sur le téléphone.</div>
     <button class="save-btn" id="chaufGo" onclick="confirmChauffeur()" disabled>Continuer</button>
+    <div id="loginDiag" style="display:none;font-size:11px;margin-top:8px;padding:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#7f1d1d;word-break:break-all"></div>
     <div style="text-align:center;margin-top:14px"><button onclick="forceReload()" style="border:none;background:transparent;color:var(--sub);font-size:13px;font-weight:600;padding:8px">&#8635; Actualiser la liste</button></div>`;
+  const lv=document.getElementById('loginVer'); if(lv) lv.textContent='version '+String(APP_VERSION).replace(/^v/i,'');
 }
 function chkLogin(){
   var ok=document.getElementById('chaufSel').value&&/^[0-9]{6}$/.test(document.getElementById('chaufPwd').value);
@@ -1543,6 +1546,7 @@ async function confirmChauffeur(){
   }
   if(!agentId){ uiToast('Ton compte n\'est pas encore reli\u00e9 \u2014 vois avec le responsable','err'); return; }
   var btn=document.getElementById('chaufGo'); if(btn)btn.disabled=true;
+  var diag=document.getElementById('loginDiag'); if(diag){ diag.style.display='none'; diag.textContent=''; }
   busy('Connexion\u2026');
   firebase.auth().signInWithEmailAndPassword(emailAgent(agentId),pin).then(function(){
     busyDone();
@@ -1555,6 +1559,15 @@ async function confirmChauffeur(){
     else if(code==='auth/too-many-requests'){ uiToast('Trop d\'essais \u2014 patiente quelques minutes','err'); }
     else if(code==='auth/network-request-failed'){ uiToast('Pas de r\u00e9seau \u2014 r\u00e9essaie','err'); }
     else { uiToast('Code incorrect \u2014 c\'est celui de ton planning','err'); }
+    /* Diagnostic : code d'erreur Firebase brut, comme dans mobile-v2. Le message
+       ci-dessus regroupe plusieurs causes (vieux navigateur, date du telephone,
+       reseau) : ce bloc permet de savoir laquelle. Aucun code ni mot de passe affiche. */
+    try{
+      if(diag){
+        diag.textContent='Diagnostic : '+(code||'?')+' \u2014 '+((err&&err.message)||'')+' | '+APP_VERSION+' | '+(navigator.userAgent||'');
+        diag.style.display='block';
+      }
+    }catch(e){}
   });
 }
 function pickChauffeur(id){
