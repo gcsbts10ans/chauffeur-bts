@@ -180,6 +180,11 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
    lisible d'un coup d'oeil avec des gants et en pleine lumiere. */
 .chg-step button.moins{background:#DC2626;color:#fff;box-shadow:0 3px 10px rgba(220,38,38,.28)}
 .chg-step button.plus{background:#16a34a;color:#fff;box-shadow:0 3px 10px rgba(22,163,74,.28)}
+/* Saisie directe du nombre (14/10/2026) : remplace les boutons − / +. */
+.chg-in{width:130px;height:66px;box-sizing:border-box;border:2px solid var(--line);border-radius:16px;background:#fff;
+  text-align:center;font-family:inherit;font-size:36px;font-weight:800;color:var(--ink);outline:none}
+.chg-in:focus{border-color:#1E5FAD;box-shadow:0 0 0 3px rgba(30,95,173,.15)}
+.chg-in-u{font-size:12px;color:var(--sub);text-align:center;margin-top:4px}
 .rolls-ov{display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,24,48,.55);align-items:center;justify-content:center;padding:20px}
 .rolls-ov.on{display:flex}
 .rolls-card{background:#fff;border-radius:20px;padding:20px;width:100%;max-width:360px;max-height:92vh;overflow:auto;box-shadow:0 16px 48px rgba(0,0,0,.28)}
@@ -1148,7 +1153,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v84';
+const APP_VERSION='v86';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1197,6 +1202,7 @@ db.enablePersistence().catch(()=>{});
    Resultat renvoye : 'ok' (confirme serveur) ou 'differe' (en file).
    -------------------------------------------------------------------------- */
 var FB_WRITE_MS=6000;
+const PHOTO_MAX_MS=60000;   // envoi des photos abandonne au-dela d'une minute
 function fbWrite(promesse){
   return new Promise(function(resolve,reject){
     var fini=false;
@@ -2271,15 +2277,13 @@ function demandeRolls(client,restants,format,init){
         +'<div class="rolls-t" id="rollsTitre">Rolls</div>'
         +'<div class="rolls-site" id="rollsSite"></div>'
         +'<div class="chg-lbl" id="rollsLblDep">Propres déposés</div>'
-        +'<div class="chg-step">'
-        +'<button class="moins" onclick="rollsStep(\'deposes\',-1)" aria-label="Retirer">−</button>'
-        +'<div class="chg-n"><b id="rollsDep">0</b><span>déposés</span></div>'
-        +'<button class="plus" onclick="rollsStep(\'deposes\',1)" aria-label="Ajouter">+</button></div>'
+        +'<div class="chg-step"><div>'
+        +'<input class="chg-in" id="rollsDep" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" onfocus="this.select()" oninput="rollsSet(\'deposes\',this)" aria-label="Nombre déposés">'
+        +'<div class="chg-in-u">déposés</div></div></div>'
         +'<div class="chg-lbl">Sales récupérés</div>'
-        +'<div class="chg-step">'
-        +'<button class="moins" onclick="rollsStep(\'recuperes\',-1)" aria-label="Retirer">−</button>'
-        +'<div class="chg-n"><b id="rollsRec">0</b><span>récupérés</span></div>'
-        +'<button class="plus" onclick="rollsStep(\'recuperes\',1)" aria-label="Ajouter">+</button></div>'
+        +'<div class="chg-step"><div>'
+        +'<input class="chg-in" id="rollsRec" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" onfocus="this.select()" oninput="rollsSet(\'recuperes\',this)" aria-label="Nombre récupérés">'
+        +'<div class="chg-in-u">récupérés</div></div></div>'
         +'<div class="rolls-info" id="rollsInfo"></div>'
         +'<button class="save-btn" id="rollsOkBtn" style="margin-top:14px" onclick="rollsOk()">Valider la dépose</button>'
         +'<div onclick="rollsCancel()" style="text-align:center;margin-top:12px;color:#6b7280;cursor:pointer;font-size:14px">Annuler</div>'
@@ -2300,10 +2304,23 @@ function demandeRolls(client,restants,format,init){
     ov.classList.add('on');
   });
 }
+/* Nombre saisi au clavier : chiffres seuls, champ vide = 0. */
+function lireNombre(inp){
+  var v=String(inp.value||'').replace(/[^0-9]/g,'').slice(0,3);
+  if(inp.value!==v)inp.value=v;
+  return v===''?0:parseInt(v,10);
+}
 function rollsPaint(){
   if(!_rollsCtx)return;
-  document.getElementById('rollsDep').textContent=_rollsCtx.deposes;
-  document.getElementById('rollsRec').textContent=_rollsCtx.recuperes;
+  // Champs remplis a l'ouverture ; 0 laisse vide pour taper directement.
+  document.getElementById('rollsDep').value=_rollsCtx.deposes?String(_rollsCtx.deposes):'';
+  document.getElementById('rollsRec').value=_rollsCtx.recuperes?String(_rollsCtx.recuperes):'';
+  document.getElementById('rollsDep').placeholder='0';
+  document.getElementById('rollsRec').placeholder='0';
+  rollsInfoPaint();
+}
+function rollsInfoPaint(){
+  if(!_rollsCtx)return;
   var el=document.getElementById('rollsInfo');
   if(!el)return;
   if(_rollsCtx.restants==null){ el.textContent=''; return; }
@@ -2316,10 +2333,10 @@ function rollsPaint(){
     : 'Il restera '+reste+' '+_n(reste)+' à bord.';
   el.className='rolls-info'+(reste<0?' warn':'');
 }
-function rollsStep(champ,d){
+function rollsSet(champ,inp){
   if(!_rollsCtx)return;
-  _rollsCtx[champ]=Math.max(0,(_rollsCtx[champ]||0)+d);
-  rollsPaint();
+  _rollsCtx[champ]=lireNombre(inp);
+  rollsInfoPaint();   // pas de rafraichissement des champs : le clavier reste ouvert
 }
 function rollsClose(){ var ov=document.getElementById('rollsOv'); if(ov)ov.classList.remove('on'); }
 function rollsOk(){ var r=_rollsCtx; rollsClose(); var f=_rollsRes; _rollsCtx=null;_rollsRes=null; if(f)f({deposes:r.deposes||0,recuperes:r.recuperes||0,format:r.format||'roll'}); }
@@ -3180,24 +3197,21 @@ function renderCharge(){
       <div class="chg-veh"><b>${S.vehicule.id}</b><span>${S.vehicule.type||''}${S.vehicule.prestataire?' · '+S.vehicule.prestataire:''}</span></div>
       ${nt>1?`<div class="chg-tour">Tour ${nt}</div>`:''}
       <div class="chg-lbl">Rolls${nt>1?' — tour '+nt:''}</div>
-      <div class="chg-step">
-        <button class="moins" onclick="changeRolls('propres',-1)" aria-label="Retirer un roll">−</button>
-        <div class="chg-n"><b>${np}</b><span>rolls · ${ROLL_KG} kg</span></div>
-        <button class="plus" onclick="changeRolls('propres',1)" aria-label="Ajouter un roll">+</button>
-      </div>
+      <div class="chg-step"><div>
+        <input class="chg-in" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" placeholder="0" value="${np||''}" onfocus="this.select()" oninput="setRolls('propres',this)" aria-label="Nombre de rolls">
+        <div class="chg-in-u">rolls · ${ROLL_KG} kg</div>
+      </div></div>
       <div class="chg-lbl">Cabris</div>
-      <div class="chg-step">
-        <button class="moins" onclick="changeRolls('cabris',-1)" aria-label="Retirer un cabri">−</button>
-        <div class="chg-n"><b>${nc}</b><span>cabris · ${CABRI_KG} kg</span></div>
-        <button class="plus" onclick="changeRolls('cabris',1)" aria-label="Ajouter un cabri">+</button>
-      </div>
-      <div class="chg-poids">Poids estimé au départ<br><b>${poids} kg</b></div>
-      ${chargeAlerte(np+nc,poids)}
+      <div class="chg-step"><div>
+        <input class="chg-in" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" placeholder="0" value="${nc||''}" onfocus="this.select()" oninput="setRolls('cabris',this)" aria-label="Nombre de cabris">
+        <div class="chg-in-u">cabris · ${CABRI_KG} kg</div>
+      </div></div>
+      <div id="chgPoids">${chargePoidsHtml()}</div>
       <div class="chg-note" style="border:none;padding-top:0">Le linge sale se compte chez chaque client, au moment de valider l'arrêt.</div>
       <div class="chg-note">Estimation : 1 roll ≈ ${ROLL_KG} kg, 1 cabri ≈ ${CABRI_KG} kg. Ce n'est pas un pesage certifié — le poids légal réel se mesure au pont-bascule.</div>
       ${_chargeMandatory?'<div class="chg-note" style="margin-top:12px">La localisation démarre au départ en tournée, après validation du chargement, et s’arrête à la clôture. Avant et après, vous n’êtes pas localisé. Seule la dernière position est conservée, effacée à la clôture.</div>':''}
       ${_chargeMandatory?'<button class="save-btn" style="margin-top:12px" onclick="confirmCharge()">Démarrer la tournée</button>':''}
-      ${(!_chargeMandatory&&dejaFait)?`<button class="save-btn" style="margin-top:14px;background:#0f766e" onclick="nouveauTour()">Je repars pour un tour</button>
+      ${(!_chargeMandatory)?`<button class="save-btn" style="margin-top:14px;background:#0f766e" onclick="nouveauTour()">Je repars pour un tour</button>
       <div class="chg-note" style="border:none;padding-top:6px">À utiliser au retour à l\'usine, une fois le camion vidé. Le comptage repart à zéro pour le tour suivant.</div>`:''}
       ${(nt>1||dejaFait)?`<div class="chg-note">Aujourd\'hui : ${chargeTotalJour()} contenant${chargeTotalJour()>1?'s':''} chargé${chargeTotalJour()>1?'s':''} sur ${nt} tour${nt>1?'s':''}.</div>`:''}
     </div>`;
@@ -3236,6 +3250,11 @@ async function nouveauTour(){
   let msg='Le comptage repart à zéro pour le tour '+((CHARGE.tour||1)+1)+'.';
   if(ab.propres>0) msg='Attention : il reste '+ab.propres+' roll'+(ab.propres>1?'s':'')
     +' propre'+(ab.propres>1?'s':'')+' à bord d\'après le comptage. '+msg;
+  /* Le bouton etait masque tant qu'aucun client n'avait ete valide dans le
+     tour : un chauffeur a du valider un client absent de son camion pour
+     repartir (retour Vincent M, 13/10). Le bouton est desormais toujours la ;
+     on previent simplement si rien n'a ete valide, sans bloquer. */
+  if(!(ab.deposes>0||ab.sales>0)) msg='Aucun client n\'a été validé pendant ce tour. '+msg;
   const ok=await uiConfirm('Repartir pour un tour ?',msg,'Nouveau tour');
   if(!ok)return;
   if(_chargeSaveT){clearTimeout(_chargeSaveT);_chargeSaveT=null;}
@@ -3271,10 +3290,17 @@ async function confirmCharge(){
   demarrerVeilleGeo();
   enterHub();
 }
-function changeRolls(type,d){
+/* Poids et rappel de charge, rafraichis seuls pendant la saisie pour ne pas
+   refermer le clavier. */
+function chargePoidsHtml(){
+  const p=chargePoids();
+  return '<div class="chg-poids">Poids estimé au départ<br><b>'+p+' kg</b></div>'
+    +chargeAlerte((CHARGE.propres||0)+(CHARGE.cabris||0),p);
+}
+function setRolls(type,inp){
   if(type!=='propres'&&type!=='cabris')return;
-  CHARGE[type]=Math.max(0,(CHARGE[type]||0)+d);
-  renderCharge();
+  CHARGE[type]=lireNombre(inp);
+  const z=document.getElementById('chgPoids'); if(z)z.innerHTML=chargePoidsHtml();
   if(_chargeSaveT)clearTimeout(_chargeSaveT);
   _chargeSaveT=setTimeout(saveCharge,700);
 }
@@ -4027,58 +4053,23 @@ async function saveEntretien(){
    `quand` limite l'affichage d'un point a un jour precis (0=dim … 6=sam) ;
    `tournee` le limite a une tournee donnee (par numero, pas par identifiant :
    la reforme concerne la T82 quel que soit le camion qui l'assure) ;
-   `mensuel` le limite au debut et a la fin du mois.
 
-   LAVAGE EXTERIEUR — passe du jeudi hebdomadaire a deux fois par mois
-   (16/09/2026, demande d'Eric).
-   Pas de date fixe : un 1er qui tombe un dimanche, et personne n'est
-   interroge. On ouvre donc deux FENETRES de cinq jours, du 1er au 5 et les
-   cinq derniers jours du mois, ce qui garantit plusieurs jours travailles
-   dans chacune.
-   Et on cesse de demander des que le camion a ete declare lave dans la
-   fenetre en cours : sans cela le chauffeur repondrait cinq fois, et les
-   quatre refus gonfleraient les non-conformites de l'audit qualite.
+   LAVAGE EXTERIEUR — retire de la cloture (14/10/2026, demande d'Eric).
+   Il n'est plus programme dans l'application : le responsable previent le
+   chauffeur par la messagerie quand le lavage exterieur est a faire.
+   L'historique deja saisi reste lisible cote responsable (colonne « — »
+   pour les clotures sans ce point).
    -------------------------------------------------------------------------- */
 const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
-  {id:'caisse_ext', label:'Lavage extérieur',           mensuel:true},
   {id:'cabine',     label:'Nettoyage intérieur cabine'}
 ];
-const FEN_JOURS=5;   // largeur de chaque fenetre, en jours
-/* Fenetre mensuelle en cours, ou null hors fenetre. Renvoie les bornes en
-   date ISO pour interroger les clotures. */
-function fenetreMois(d){
-  d=d||new Date();
-  const jour=d.getDate();
-  const dernier=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-  const iso=n=>isoLocal(new Date(d.getFullYear(), d.getMonth(), n));
-  if(jour<=FEN_JOURS)            return {debut:iso(1), fin:iso(FEN_JOURS), quoi:'début'};
-  if(jour>dernier-FEN_JOURS)     return {debut:iso(dernier-FEN_JOURS+1), fin:iso(dernier), quoi:'fin'};
-  return null;
-}
-/* Vrai si ce camion a deja ete declare lave dans la fenetre en cours.
-   Une seule lecture, et uniquement pendant les deux fenetres. */
-var _extFait=false;
-async function majLavageExterieur(){
-  _extFait=false;
-  const f=fenetreMois();
-  if(!f||!S.vehicule)return;
-  try{
-    const q=await db.collection('chauffeurs_checklist_fin')
-      .where('date','>=',f.debut).where('date','<=',f.fin).limit(60).get();
-    q.forEach(function(d){
-      const x=d.data();
-      if(x.vehicule===S.vehicule.id && x.items && x.items['Lavage extérieur']===true) _extFait=true;
-    });
-  }catch(e){ console.warn('lavage ext', e); }   // hors reseau : on demande, c'est le moins risque
-}
 // Points affiches aujourd'hui, selon le jour et les tournees du chauffeur.
 function finItems(){
   const j=new Date().getDay();
   const nums=(S.tournees||[]).map(t=>String(t.numero));
   return FIN_ITEMS.filter(function(it){
     if(it.quand!=null && it.quand!==j) return false;
-    if(it.mensuel && (!fenetreMois() || _extFait)) return false;
     if(it.tournee && nums.indexOf(String(it.tournee))<0) return false;
     return true;
   });
@@ -4088,9 +4079,6 @@ async function openFin(){
   document.getElementById('finNote').value='';
   PH['fin']=[];renderThumbs('fin','finThumbs');
   finAnomalies();
-  // Le lavage exterieur n'est demande qu'en debut et fin de mois, et une
-  // seule fois par fenetre : on verifie avant d'afficher la liste.
-  await majLavageExterieur();
   document.getElementById('finChk').innerHTML=finItems().map(it=>`
     <div class="chk-row" data-id="${it.id}"><span class="lbl">${esc(it.label)}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
@@ -4113,7 +4101,9 @@ async function finAnomalies(){
       : '<div class="fin-ano">Aucune anomalie signal\u00e9e aujourd\u2019hui. Si tu as constat\u00e9 quelque chose, passe par <b>Signaler une anomalie</b> avant de cl\u00f4turer.</div>';
   }catch(e){ box.innerHTML=''; }
 }
+var _finEnCours=false;   // bloque le double appui : il creait une seconde cloture
 async function saveFin(){
+  if(_finEnCours)return;
   // Cle = libelle du point, pour rester lisible dans le journal du responsable.
   const items={},liste=finItems();
   document.querySelectorAll('#finChk .chk-row').forEach((row,i)=>{
@@ -4124,6 +4114,7 @@ async function saveFin(){
   const note=(document.getElementById('finNote').value||'').trim();
   const ok=await uiConfirm('Clôturer la journée',done+'/'+liste.length+' points validés sur '+S.vehicule.id+'. Confirmer la clôture ?','Clôturer');
   if(!ok)return;
+  _finEnCours=true;
   try{
     // `tournee` : identifiant de la premiere tournee du jour. Sert au tableau
     // de suivi du responsable, qui affiche la tournee des chauffeurs ayant
@@ -4148,16 +4139,21 @@ async function saveFin(){
     PH['fin']=[];
     markFinDone();
     try{stopGeo();arreterVeilleGeo();}catch(e){}
+    /* fbWrite : sans reseau, un set() attendu ne rend jamais la main et l'ecran
+       restait fige sur la cloture, deja enregistree (retour Florent, 13/10).
+       L'ecriture part de toute facon a la reconnexion. */
     try{
-      await db.collection('chauffeurs_positions').doc(S.chauffeur.id).set({
+      await fbWrite(db.collection('chauffeurs_positions').doc(S.chauffeur.id).set({
         chauffeur:S.chauffeur.id, chauffeurNom:chNom(),
         vehicule:S.vehicule?S.vehicule.id:null,
         tournees:S.vehicule?(S.vehicule.tournees||[]):[],
         termine:true, termineAt:Date.now(), at:Date.now(), auDepot:true
-      },{merge:true});
+      },{merge:true}));
     }catch(e){console.warn('position cloture',e);}
+    busyDone();
     openDebrief();
   }catch(e){uiToast('Échec clôture','err');}
+  finally{ _finEnCours=false; }
 }
 function openDebrief(){
   document.getElementById('debVeh').textContent=S.vehicule.id;
@@ -4260,11 +4256,22 @@ function alertePhotos(n, urls, quoi){
 }
 async function uploadPhotos(category,refId,photos){
   if(!photos||!photos.length)return [];
+  /* Delai maximum : au depot, reseau Orange faible, l'envoi pouvait ne jamais
+     aboutir. L'ecran restait sur « Envoi des photos… » et le chauffeur ne
+     pouvait plus cloturer (retour Florent, 13/10). Au-dela de PHOTO_MAX_MS
+     on abandonne : l'appelant affiche « photos non envoyees » et continue. */
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  let _tp=null;
+  const delai=new Promise(function(_,rej){ _tp=setTimeout(function(){ try{ctrl&&ctrl.abort();}catch(e){} rej(new Error('delai photos')); },PHOTO_MAX_MS); });
   try{
-    const res=await fetch(PHOTO_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'uploadPhotos',category,refId,photos}),redirect:'follow'});
-    const j=await res.json();
+    const envoi=(async function(){
+      const res=await fetch(PHOTO_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'uploadPhotos',category,refId,photos}),redirect:'follow',signal:ctrl?ctrl.signal:undefined});
+      return await res.json();
+    })();
+    const j=await Promise.race([envoi,delai]);
     return (j&&j.ok&&j.urls)?j.urls:[];
   }catch(e){console.warn('upload photos',e);return [];}
+  finally{ if(_tp)clearTimeout(_tp); }
 }
 function busy(msg){document.getElementById('busyMsg').textContent=msg||'Envoi…';document.getElementById('busy').classList.add('show');}
 function busyDone(){document.getElementById('busy').classList.remove('show');}
