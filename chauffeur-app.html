@@ -1153,7 +1153,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v86';
+const APP_VERSION='v87';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -4054,6 +4054,11 @@ async function saveEntretien(){
    `tournee` le limite a une tournee donnee (par numero, pas par identifiant :
    la reforme concerne la T82 quel que soit le camion qui l'assure) ;
 
+   NETTOYAGE CABINE — demande le vendredi seulement (16/10/2026, demande de
+   John) : un nettoyage complet en fin de semaine plutot qu'un point coche
+   chaque jour. Les autres jours, le point n'est pas pose : il ne compte ni
+   comme fait ni comme ecart cote responsable.
+
    LAVAGE EXTERIEUR — retire de la cloture (14/10/2026, demande d'Eric).
    Il n'est plus programme dans l'application : le responsable previent le
    chauffeur par la messagerie quand le lavage exterieur est a faire.
@@ -4062,7 +4067,7 @@ async function saveEntretien(){
    -------------------------------------------------------------------------- */
 const FIN_ITEMS=[
   {id:'caisse_int', label:'Caisse désinfectée'},
-  {id:'cabine',     label:'Nettoyage intérieur cabine'}
+  {id:'cabine',     label:'Nettoyage intérieur cabine', quand:5}   // vendredi seulement : nettoyage a fond (John, 16/10/2026)
 ];
 // Points affiches aujourd'hui, selon le jour et les tournees du chauffeur.
 function finItems(){
