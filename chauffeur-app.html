@@ -1153,7 +1153,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v87';
+const APP_VERSION='v88';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1377,10 +1377,34 @@ function readCache(){
   return null;
 }
 function writeCache(){
-  try{localStorage.setItem('chf_base',JSON.stringify({ts:Date.now(),profils:CHAUFFEURS,vehicules:VEHICULES,tournees:TOURNEES_REF}));}catch(e){}
+  try{localStorage.setItem('chf_base',JSON.stringify({ts:Date.now(),profils:CHAUFFEURS,vehicules:VEHICULES}));}catch(e){}
+}
+/* v88 — Les tournees (adresses, digicodes) ne sont plus chargees avant la
+   connexion : elles le sont apres la saisie du code, gardees dans un cache
+   a part, et effacees a la deconnexion. L'ecran de connexion ne donne donc
+   plus acces aux digicodes. */
+function oublierTournees(){
+  TOURNEES_REF={};
+  try{localStorage.removeItem('chf_tours');}catch(e){}
+}
+async function loadTournees(){
+  try{
+    var p=JSON.parse(localStorage.getItem('chf_tours')||'null');
+    if(p&&p.tournees&&(Date.now()-p.ts)<CACHE_TTL){ TOURNEES_REF=p.tournees; return; }
+  }catch(e){}
+  try{
+    var ct=await db.collection('chauffeurs_tournees').limit(100).get();
+    TOURNEES_REF={};
+    ct.docs.forEach(function(d){ TOURNEES_REF[d.id]=tourNorm(d); });
+    try{localStorage.setItem('chf_tours',JSON.stringify({ts:Date.now(),tournees:TOURNEES_REF}));}catch(e){}
+  }catch(e){
+    // Hors ligne : l'ecran de la journee relit les tournees manquantes une a une.
+    console.warn('tournees',e);
+  }
 }
 function forceReload(){
   try{localStorage.removeItem('chf_base');}catch(e){}
+  oublierTournees();
   go('load');document.getElementById('loadTxt').textContent='Actualisation…';
   loadBaseNetwork();
 }
@@ -1476,8 +1500,9 @@ function tLabel(t){
 function tourById(tid){ return S.tournees.find(function(x){return String(x.tid)===String(tid);}); }
 function loadBase(){
   const c=readCache();
-  if(c&&c.tournees){ // 0 read — servi du cache local
-    CHAUFFEURS=c.profils; VEHICULES=c.vehicules; TOURNEES_REF=c.tournees;
+  if(c){ // 0 read — servi du cache local
+    CHAUFFEURS=c.profils; VEHICULES=c.vehicules;
+    if(c.tournees) writeCache();   // ancien cache v87 : on retire les tournees
     renderChauffeurs(); enterLogin(); return;
   }
   loadBaseNetwork();
@@ -1489,16 +1514,11 @@ async function loadBaseNetwork(){
     document.getElementById('loadTxt').textContent='Chargement…';
     // Lectures bornees : referentiel a croissance lente, mais aucune lecture
     // de collection entiere ne doit partir sans plafond en production.
-    const [cp,cv,ct]=await Promise.all([
+    // Les tournees ne sont plus lues ici (v88) : voir loadTournees().
+    const [cp,cv]=await Promise.all([
       db.collection('chauffeurs_profils').limit(300).get(),
-      db.collection('chauffeurs_vehicules').limit(100).get(),
-      db.collection('chauffeurs_tournees').limit(100).get()
+      db.collection('chauffeurs_vehicules').limit(100).get()
     ]);
-    TOURNEES_REF={};
-    // Indexation par ID DE DOCUMENT et non par numero : deux tournees peuvent
-    // partager le meme numero (80MAS et 80GPL sont toutes deux des T80). Indexer
-    // par numero faisait silencieusement disparaitre la seconde.
-    ct.docs.forEach(function(d){ TOURNEES_REF[d.id]=tourNorm(d); });
     CHAUFFEURS=cp.docs.map(d=>d.data()).filter(c=>c.actif!==false)
       .sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
     VEHICULES=cv.docs.map(d=>d.data()).filter(v=>v.actif!==false)
@@ -1576,7 +1596,11 @@ async function confirmChauffeur(){
     }catch(e){}
   });
 }
-function pickChauffeur(id){
+async function pickChauffeur(id){
+  // Tournees lues seulement une fois le chauffeur connecte (v88).
+  busy('Chargement des tourn\u00e9es\u2026');
+  await loadTournees();
+  busyDone();
   S.chauffeur=CHAUFFEURS.find(c=>c.id===id);
   try{localStorage.setItem('chf_last',id);}catch(e){}
   document.getElementById('vehAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
@@ -3614,6 +3638,7 @@ function goLogin(){
   if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
   try{stopGeo();}catch(e){}
   hideMsgPill();
+  oublierTournees();
   // On quitte le compte agent : l'ecran de connexion doit pouvoir relire la liste.
   var u=firebase.auth().currentUser;
   if(u&&!u.isAnonymous){
