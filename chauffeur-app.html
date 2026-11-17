@@ -1153,7 +1153,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v88';
+const APP_VERSION='v89';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1393,18 +1393,33 @@ async function loadTournees(){
     if(p&&p.tournees&&(Date.now()-p.ts)<CACHE_TTL){ TOURNEES_REF=p.tournees; return; }
   }catch(e){}
   try{
-    var ct=await db.collection('chauffeurs_tournees').limit(100).get();
+    // v89 : delai borne. Sans reseau, la connexion restait sur « Chargement
+    // des tournees » le temps que Firestore renonce.
+    var ct=await avecDelai(db.collection('chauffeurs_tournees').limit(100).get(),10000);
     TOURNEES_REF={};
     ct.docs.forEach(function(d){ TOURNEES_REF[d.id]=tourNorm(d); });
     try{localStorage.setItem('chf_tours',JSON.stringify({ts:Date.now(),tournees:TOURNEES_REF}));}catch(e){}
   }catch(e){
-    // Hors ligne : l'ecran de la journee relit les tournees manquantes une a une.
+    // Hors ligne : on reprend les tournees deja connues du telephone (memoire
+    // locale de Firestore). L'ecran de la journee relira celles qui manquent.
     console.warn('tournees',e);
+    try{
+      var cc=await db.collection('chauffeurs_tournees').limit(100).get({source:'cache'});
+      cc.docs.forEach(function(d){ TOURNEES_REF[d.id]=tourNorm(d); });
+    }catch(e2){}
   }
+}
+/* Rejette la promesse si elle n'aboutit pas dans le delai (ms). */
+function avecDelai(promesse,ms){
+  return new Promise(function(res,rej){
+    var t=setTimeout(function(){ rej(new Error('delai')); },ms);
+    promesse.then(function(v){ clearTimeout(t); res(v); },function(e){ clearTimeout(t); rej(e); });
+  });
 }
 function forceReload(){
   try{localStorage.removeItem('chf_base');}catch(e){}
   oublierTournees();
+  masquerEchecChargement();
   go('load');document.getElementById('loadTxt').textContent='Actualisation…';
   loadBaseNetwork();
 }
@@ -1608,9 +1623,10 @@ async function pickChauffeur(id){
   attachMessages();
   attachAlertes();
   pushAppVersion();
+  setTimeout(pfVider,4000);   // v89 : photos restees en attente
   renderVehicules();
   if(!welcomeDoneToday()){ markWelcomeDone(); showBoot(()=>{go('veh');checkUnclosedDays();}); }
-  else { go('veh'); checkUnclosedDays(); }
+  else { go('veh'); checkUnclosedDays(); verifierDateServeur(); }   // v89 : a chaque connexion, pas une fois par jour
 }
 function pushAppVersion(){
   if(!S.chauffeur||typeof db==='undefined'||!db)return;
@@ -1942,6 +1958,25 @@ document.addEventListener('visibilitychange',function(){
     reveillerEcoutes();
   }
 });
+/* v89 : tournee introuvable (pas de reseau) — message et deux boutons sur
+   l'ecran de chargement, au lieu d'un ecran bloque. */
+function afficherEchecChargement(){
+  document.getElementById('loadTxt').textContent='Pas de réseau : la tournée n\u2019a pas pu être chargée.';
+  var sp=document.querySelector('#s-load .spin'); if(sp) sp.style.display='none';
+  var z=document.getElementById('loadEchec');
+  if(!z){
+    z=document.createElement('div'); z.id='loadEchec';
+    z.style.cssText='margin-top:22px;width:100%;max-width:320px';
+    z.innerHTML='<button class="save-btn" onclick="pickVehicule(S.vehicule)">Réessayer</button>'
+      +'<div style="text-align:center;margin-top:10px"><button onclick="masquerEchecChargement();backToVehicule()" style="border:none;background:transparent;color:var(--sub);font-size:14px;font-weight:600;padding:10px">Retour</button></div>';
+    var w=document.querySelector('#s-load .intro-load'); if(w&&w.parentNode) w.parentNode.insertBefore(z,w.nextSibling);
+  }
+  z.style.display='block';
+}
+function masquerEchecChargement(){
+  var z=document.getElementById('loadEchec'); if(z) z.style.display='none';
+  var sp=document.querySelector('#s-load .spin'); if(sp) sp.style.display='';
+}
 async function pickVehicule(id){
   S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
@@ -1952,14 +1987,23 @@ async function pickVehicule(id){
   var _jr=''; try{ _jr=new Date(TODAY+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){}
   document.getElementById('jourSub').textContent=(_jr?_jr+' · ':'')+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t))).join(' puis ');
   go('load');document.getElementById('loadTxt').textContent='Chargement de la tournée…';
+  masquerEchecChargement();
 
   // Tournées retenues : servies depuis TOURNEES_REF (chargé au démarrage).
   // Lecture réseau uniquement pour une tournée absente du cache.
   const nums=S.vehicule.tournees||[];
   const manquantes=nums.filter(function(x){return !TOURNEES_REF[String(x)];});
   if(manquantes.length){
-    const snaps=await Promise.all(manquantes.map(function(x){return db.collection('chauffeurs_tournees').doc(String(x)).get();}));
-    snaps.forEach(function(s){ if(s.exists)TOURNEES_REF[s.id]=tourNorm(s); });
+    /* v89 : sans reseau, cette lecture echouait sans que rien ne la rattrape :
+       l'ecran restait bloque sur « Chargement de la tournee ». */
+    // Seul un ECHEC de lecture (reseau) bloque. Une tournee qui n'existe pas
+    // (numero mal saisi sur le camion) est ignoree, comme avant.
+    let _echec=false;
+    try{
+      const snaps=await avecDelai(Promise.all(manquantes.map(function(x){return db.collection('chauffeurs_tournees').doc(String(x)).get();})),10000);
+      snaps.forEach(function(s){ if(s.exists)TOURNEES_REF[s.id]=tourNorm(s); });
+    }catch(e){ console.warn('lecture tournees',e); _echec=true; }
+    if(_echec){ afficherEchecChargement(); return; }
   }
   S.tournees=nums.map(function(x){return TOURNEES_REF[String(x)];}).filter(Boolean)
     .map(function(t){ var c={}; for(var k in t){ if(Object.prototype.hasOwnProperty.call(t,k))c[k]=t[k]; } return c; });
@@ -2136,7 +2180,7 @@ function openStop(num,ordre){
   document.getElementById('detBody').innerHTML=`
     ${doneBanner}
     <div class="glass det-card">
-      <div class="num">T${num} · Arrêt ${(t.arrets||[]).slice().sort(bySeq).findIndex(x=>x.ordre===ordre)+1} / ${(t.arrets||[]).length}${ordre!=null?` · QR ${ordre}`:''}</div>
+      <div class="num">${esc(tLabel(TOURNEES_REF[num])||('T'+num))} · Arrêt ${(t.arrets||[]).slice().sort(bySeq).findIndex(x=>x.ordre===ordre)+1} / ${(t.arrets||[]).length}${ordre!=null?` · QR ${ordre}`:''}</div>
       <h2>${esc(a.client)}</h2>
       <div class="det-row"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
         <div><div class="l">Adresse</div><div class="v">${esc(a.adresse||'—')}</div></div></div>
@@ -2148,7 +2192,8 @@ function openStop(num,ordre){
         <div><div class="l">Consignes</div><div class="v">${esc(a.consignes)}</div></div></div>`:''}
     </div>
     ${validLL(a)?`<button class="nav-btn" onclick="cGoToStop('${num}',${ordre})"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (guidage)</button>`:(a.adresse?`<a class="nav-btn" href="${mapsTo(a.adresse)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Y aller (Maps)</a>`:'')}
-    ${st&&st.ok?`
+    ${st&&st.ok&&st.ferme?`
+    <button class="manual" onclick="askAnnulerFerme()" style="border-color:#475569;color:#475569">Annuler service fermé</button>`:st&&st.ok?`
     <button class="manual" onclick="askCorrigerRolls()">Corriger les rolls</button>
     <button class="manual" onclick="askRepassage()">Repasser sur ce site (dépannage)</button>`:`
     <button class="scan-btn" onclick="scanStop('qr')"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M4 12h16"/></svg>
@@ -2178,7 +2223,10 @@ async function validateDepose(num,ordre,mode,client,rolls){
       date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
       arrets:{[ordre]:{ok:true,mode,at:Date.now(),arriveeAt:(_arriveeAt[num+'_'+ordre]||null),
         arriveeGpsAt:(_arriveeGps[num+'_'+ordre]||null),client:client||'',
-        rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll')}}
+        rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll'),
+        // v89 : qui a fait l'arret. Le champ `chauffeur` de la tournee est
+        // reecrit a chaque relais : seul l'arret garde le bon nom.
+        chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id}}
     },{merge:true}));
     uiToast(fbMsg(_r,'Dépose validée — '+(client||'')),'ok');
     go('jour'); // le listener onSnapshot rafraîchira la journée
@@ -2214,7 +2262,7 @@ async function repasserArret(num,ordre,client,rolls){
     maj[base+'nbPassages']=FV.increment(1);
     maj[base+'passages']=FV.arrayUnion({at:Date.now(),mode:'repassage',
       rollsDeposes:(rolls.deposes||0),rollsRecuperes:(rolls.recuperes||0),
-      chauffeur:S.chauffeur.id,chauffeurNom:chNom()});
+      chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:(S.vehicule?S.vehicule.id:'')});
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(docId).update(maj));
     uiToast(fbMsg(_r,'Repassage enregistré — '+(client||'')),'ok');
     go('jour');
@@ -2259,6 +2307,20 @@ async function askCorrigerRolls(){
   try{
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).update(maj));
     uiToast(fbMsg(_r,'Rolls corrigés — '+(a.client||'')),'ok');
+    go('jour');
+  }catch(e){ uiToast('Erreur enregistrement','err'); }
+}
+/* v89 : « Service fermé » marque par erreur. L'arret etait fige pour la
+   journee. On efface l'entree de l'arret : il redevient a valider. */
+async function askAnnulerFerme(){
+  const {num,ordre,a}=S.curStop;
+  const ok=await uiConfirm('Annuler service fermé',
+    (a.client||'Ce site')+' \u2014 l\u2019arrêt redevient à valider normalement.','Annuler le service fermé');
+  if(!ok)return;
+  try{
+    var maj={}; maj['arrets.'+ordre]=firebase.firestore.FieldValue.delete();
+    var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).update(maj));
+    uiToast(fbMsg(_r,'Service fermé annulé'),'ok');
     go('jour');
   }catch(e){ uiToast('Erreur enregistrement','err'); }
 }
@@ -2381,7 +2443,19 @@ function rollsABord(){
     var ar=(S.statuts[k]||{}).arrets||{};
     Object.keys(ar).forEach(function(o){
       var v=ar[o]||{};
-      if((v.at||0)<debut)return;
+      if((v.at||0)<debut){
+        /* v89 : arret valide a un tour precedent puis repasse (depannage)
+           pendant le tour en cours. Ses totaux couvrent toute la journee :
+           on ne compte que les repassages faits depuis le debut du tour,
+           grace a l'heure de chacun (passages[]). Avant, ils etaient ignores. */
+        (v.passages||[]).forEach(function(p){
+          if(!p||(p.at||0)<debut)return;
+          if(v.format==='cabri') debC+=(p.rollsDeposes||0);
+          else                   dep +=(p.rollsDeposes||0);
+          rec+=(p.rollsRecuperes||0);
+        });
+        return;
+      }
       if(v.format==='cabri') debC+=(v.rollsDeposes||0);
       else                   dep +=(v.rollsDeposes||0);
       rec+=(v.rollsRecuperes||0);
@@ -2433,7 +2507,8 @@ async function saveServiceFerme(){
   try{
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).set({
       date:TODAY,tournee:num,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,
-      arrets:{[ordre]:{ok:true,ferme:true,mode:'ferme',at:Date.now(),client:client,motif:motif||null}}
+      arrets:{[ordre]:{ok:true,ferme:true,mode:'ferme',at:Date.now(),client:client,motif:motif||null,
+        chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id}}
     },{merge:true}));
     uiToast(fbMsg(_r,'Service fermé noté'),'ok');
     go('jour');
@@ -3423,7 +3498,7 @@ function folderBadge(fid,unread){if(fid==='msg')return unread+alertesNew();retur
 function renderHub(){
   document.getElementById('hubAva').textContent=(S.chauffeur.prenom||ini(S.chauffeur.nom,S.chauffeur.prenom));
   document.getElementById('hubName').textContent=S.vehicule.id;
-  document.getElementById('hubVeh').textContent=(S.vehicule.type?S.vehicule.type+' · ':'')+(S.vehicule.tournees||[]).map(t=>/^T/i.test(String(t))?String(t):('T'+t)).join(' + ');
+  document.getElementById('hubVeh').textContent=(S.vehicule.type?S.vehicule.type+' · ':'')+(S.vehicule.tournees||[]).map(t=>tLabel(TOURNEES_REF[t])||(/^T/i.test(String(t))?String(t):('T'+t))).join(' + ');  // v89 : « T80- MASTER » et non « T80MAS »
   let total=0,done=0,next='';
   S.tournees.forEach(t=>(t.arrets||[]).slice().sort(bySeq).forEach(a=>{total++;const s=statutArret(t.tid,a.ordre);if(s&&s.ok)done++;else if(!next)next=a.client;}));
   const pct=total?Math.round(done/total*100):0;
@@ -3636,7 +3711,8 @@ async function finirJournee(){
 function goLogin(){
   detachMessages();detachAlertes();
   if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
-  try{stopGeo();}catch(e){}
+  // v89 : bouton de sortie = GPS ET veille coupes (avant, seul « Terminer » le faisait).
+  try{stopGeo();arreterVeilleGeo();}catch(e){}
   hideMsgPill();
   oublierTournees();
   // On quitte le compte agent : l'ecran de connexion doit pouvoir relire la liste.
@@ -3645,8 +3721,24 @@ function goLogin(){
     firebase.auth().signOut().then(function(){return firebase.auth().signInAnonymously();}).catch(function(){});
   }
   var pr=document.getElementById('chaufPwd'); if(pr)pr.value='';
+  remiseAZero();
   try{chkLogin();}catch(e){}
   go('login');
+}
+/* v89 : la deconnexion vide la journee du chauffeur en memoire. Sans cela,
+   le chauffeur suivant sur le meme telephone heritait des rolls a
+   transferer, des photos et de la signature non envoyees, des heures
+   d'arrivee sur site. La file d'attente des photos deja validees
+   (IndexedDB) n'est pas touchee : elle partira quand meme. */
+function remiseAZero(){
+  S.chauffeur=null; S.vehicule=null; S.tournees=[]; S.statuts={}; S.curStop=null;
+  CHARGE={propres:0,cabris:0,tour:1,debutAt:0,tours:[]};
+  _chargeTransfert=null;
+  Object.keys(PH).forEach(function(k){ PH[k]=[]; });
+  _sigDirty=false;
+  _arriveeAt={}; _arriveeGps={};
+  _entRows=null; _entVeh=null; _pleins=[];
+  _finPrompted=false; _leftDepot=false; _edlMandatory=false; _chargeMandatory=false;
 }
 /* ---------- Son de cloche (Web Audio, sans fichier) ---------- */
 let _actx=null;
@@ -3748,7 +3840,7 @@ function renderMessages(){
   el.innerHTML=list.map(m=>{
     const own=m.from===S.chauffeur.id;
     const when=m.at?new Date(m.at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
-    return `<div class="msg ${own?'own':'in'}">${own?'':`<div class="who">${m.fromName||labelFor(m.from)}</div>`}${(m.text||'').replace(/</g,'&lt;')}<div class="when">${when}</div></div>`;
+    return `<div class="msg ${own?'own':'in'}">${own?'':`<div class="who">${esc(m.fromName||labelFor(m.from))}</div>`}${(m.text||'').replace(/</g,'&lt;')}<div class="when">${when}</div></div>`;
   }).join('');
   el.scrollTop=el.scrollHeight;
 }
@@ -3800,11 +3892,15 @@ async function sendMessage(){
   const _ub=document.getElementById('msgUrgent'); if(_ub)_ub.classList.remove('on');
   var _ep=document.getElementById('emojiPanel');if(_ep)_ep.style.display='none';
   try{
-    await db.collection('chauffeurs_messages').add({
+    /* v89 : hors reseau, add() ne rendait jamais la main et le chauffeur ne
+       savait pas si son message etait parti. fbWrite rend 'differe' au bout
+       de quelques secondes : le message est garde et partira tout seul. */
+    const _r=await fbWrite(db.collection('chauffeurs_messages').add({
       from:S.chauffeur.id, fromName:(S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||''),
       to:S.msgTo, text:txt, vehicule:S.vehicule?S.vehicule.id:null, at:Date.now(),
       important:urgent||false, lus:{}
-    });
+    }));
+    if(_r==='differe') uiToast('Pas de réseau — message gardé, il partira au retour du réseau','ok');
   }catch(e){uiToast('Envoi impossible','err');inp.value=txt;ajusterMsgInput();}
 }
 function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); if(S.msgReturn==='veh'){S.msgReturn=null;go('veh');updateVehMsgBadge();return;} go('hub'); renderHub(); }
@@ -3834,7 +3930,7 @@ function paintAlertes(){
   el.innerHTML=rows.length?rows.map(r=>`<div class="glass hist-row">
       <div class="h1"><b>${esc(r.type||'')}</b><span class="dt">${frDate(r)}</span></div>
       ${r.message?`<div class="meta">${(r.message||'').replace(/</g,'&lt;')}</div>`:''}
-      <div class="meta" style="opacity:.7">${(r.fromName||'').trim()||'Chauffeur'}${r.vehicule?' · '+r.vehicule:''}</div>
+      <div class="meta" style="opacity:.7">${esc((r.fromName||'').trim()||'Chauffeur')}${r.vehicule?' · '+esc(r.vehicule):''}</div>
       ${suiviRow(r)}</div>`).join(''):'<div class="msg-empty">Aucune alerte</div>';
 }
 function renderAlertes(){
@@ -4057,7 +4153,7 @@ async function saveEntretien(){
   const ok=await uiConfirm('Demande d\'intervention',type+(KM?' · '+KM+' km':'')+' sur '+S.vehicule.id+' ?','Envoyer');
   if(!ok)return;
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_entretien').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type,garagiste:type,km:KM,note,statut:'ouvert',at:Date.now()}));  // v89 : garagiste = champ lu par le responsable
     setCurKm(KM);
     if(_entRows&&_entVeh===S.vehicule.id)_entRows.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type,km:KM,note,statut:'ouvert',at:Date.now()});
     document.getElementById('entNote').value='';
@@ -4155,16 +4251,13 @@ async function saveFin(){
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
     // Photos envoyees seulement si l'enregistrement est bien parti : hors
     // reseau, on ne bloque pas la cloture pour autant.
-    if(ph.length&&_r==='ok'){
+    if(ph.length){
       busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');
       try{
-        const u=await uploadPhotos('checklist_fin',ref.id,ph.map(x=>({data:x.data,type:'tableau_bord'})));
-        if(u&&u.length)await fbWrite(ref.set({photos:u},{merge:true}));
-        else alertePhotos(ph.length,u,'Clôture');
-      }catch(e){console.warn('photos cloture',e);alertePhotos(ph.length,null,'Clôture');}
+        const r=await photosOuFile('chauffeurs_checklist_fin',ref.id,'checklist_fin',ph.map(x=>({data:x.data,type:'tableau_bord'})),'photos',_r==='ok');
+        alertePhotos(ph.length,r.urls,'Clôture',r.enFile);
+      }catch(e){console.warn('photos cloture',e);alertePhotos(ph.length,null,'Clôture',false);}
       busyDone();
-    }else if(ph.length){
-      uiToast('Clôture enregistrée — photos non envoyées (hors réseau)','err');
     }
     PH['fin']=[];
     markFinDone();
@@ -4177,7 +4270,13 @@ async function saveFin(){
         chauffeur:S.chauffeur.id, chauffeurNom:chNom(),
         vehicule:S.vehicule?S.vehicule.id:null,
         tournees:S.vehicule?(S.vehicule.tournees||[]):[],
-        termine:true, termineAt:Date.now(), at:Date.now(), auDepot:true
+        termine:true, termineAt:Date.now(), at:Date.now(), auDepot:true,
+        /* v89 : la derniere position est reellement effacee a la cloture,
+           comme l'annonce l'ecran de chargement. La carte du responsable
+           n'affiche deja plus les chauffeurs termines. */
+        lat:firebase.firestore.FieldValue.delete(),
+        lng:firebase.firestore.FieldValue.delete(),
+        accuracy:firebase.firestore.FieldValue.delete()
       },{merge:true}));
     }catch(e){console.warn('position cloture',e);}
     busyDone();
@@ -4223,7 +4322,8 @@ async function askChangeVehicule(){
 }
 function backToVehicule(){
   _entRows=null;_entVeh=null; // cache entretien lie au camion : on le vide
-  try{stopGeo();}catch(e){}
+  // v89 : la veille relancait le GPS 2 min plus tard si on ne la coupait pas.
+  try{stopGeo();arreterVeilleGeo();}catch(e){}
   if(S.unsub){try{S.unsub();}catch(e){}S.unsub=null;}
   _finPrompted=false;_leftDepot=false;_edlMandatory=false;_chargeMandatory=false;
   renderVehicules();
@@ -4277,13 +4377,98 @@ function removePhoto(bucket,thumbsId,i){(PH[bucket]||[]).splice(i,1);renderThumb
    quota Drive. Les appelants faisaient alors « if(urls.length) » et n'ecrivaient
    rien : la photo etait perdue en silence, le chauffeur repartant avec un
    message vert. On l'avertit desormais, en lui disant quoi faire. */
-function alertePhotos(n, urls, quoi){
+function alertePhotos(n, urls, quoi, enFile){
   if(!n || (urls && urls.length)) return false;
-  uiToast(quoi+' enregistré'+(quoi.slice(-1)==='e'?'e':'')+' \u2014 '
-    + (n===1?'la photo n\u2019est pas partie':'les '+n+' photos ne sont pas parties')
-    + ', préviens le responsable','err');
+  var acc=quoi+' enregistré'+(quoi.slice(-1)==='e'?'e':'')+' \u2014 ';
+  if(enFile){
+    uiToast(acc+(n===1?'la photo est gardée':'les '+n+' photos sont gardées')
+      +' sur le téléphone, envoi au retour du réseau','ok');
+  }else{
+    uiToast(acc+(n===1?'la photo n\u2019est pas partie':'les '+n+' photos ne sont pas parties')
+      +', préviens le responsable','err');
+  }
   return true;
 }
+/* ==========================================================================
+   FILE D'ATTENTE DES PHOTOS (v89)
+   Hors reseau, les photos etaient perdues : seul le texte partait plus tard.
+   Elles sont desormais gardees sur le telephone (IndexedDB, base
+   « bts_photos ») avec le document auquel elles appartiennent, puis
+   renvoyees des que possible : a la connexion du chauffeur, au retour du
+   reseau, au retour au premier plan et toutes les 3 minutes tant que
+   l'application est ouverte. Une fois envoyees, leur adresse est ecrite
+   dans le document (champ photos ou signature) et l'entree est supprimee.
+   Aucune lecture Firestore ; une ecriture par envoi reussi seulement.
+   ========================================================================== */
+var _pfDb=null;
+function pfOuvrir(){
+  if(_pfDb) return Promise.resolve(_pfDb);
+  return new Promise(function(res,rej){
+    try{
+      var rq=indexedDB.open('bts_photos',1);
+      rq.onupgradeneeded=function(){ rq.result.createObjectStore('file',{keyPath:'id'}); };
+      rq.onsuccess=function(){ _pfDb=rq.result; res(_pfDb); };
+      rq.onerror=function(){ rej(rq.error); };
+    }catch(e){ rej(e); }
+  });
+}
+function pfOp(mode,fn){
+  return pfOuvrir().then(function(db_){
+    return new Promise(function(res,rej){
+      var tx=db_.transaction('file',mode), st=tx.objectStore('file'), out;
+      var r=fn(st); if(r) r.onsuccess=function(){ out=r.result; };
+      tx.oncomplete=function(){ res(out); };
+      tx.onerror=function(){ rej(tx.error); };
+    });
+  });
+}
+function pfAjouter(e){ return pfOp('readwrite',function(st){ return st.put(e); }); }
+function pfTout(){ return pfOp('readonly',function(st){ return st.getAll(); }).then(function(l){ return l||[]; }); }
+function pfRetirer(id){ return pfOp('readwrite',function(st){ return st.delete(id); }); }
+/* Ecrit l'adresse des photos dans leur document. merge:true : fonctionne
+   meme si le document lui-meme attend encore le reseau. */
+function pfEcrire(coll,docId,champ,urls){
+  var maj={};
+  if(champ==='signature') maj.signature=urls[0].url;
+  else maj.photos=urls;
+  return fbWrite(db.collection(coll).doc(docId).set(maj,{merge:true}));
+}
+/* Envoie les photos tout de suite si possible ; sinon les met en file.
+   Rend { urls, enFile } : urls non vide = envoyees ; enFile = gardees. */
+async function photosOuFile(coll,docId,category,photos,champ,tenter){
+  if(!photos||!photos.length) return {urls:[],enFile:false};
+  if(tenter){
+    var urls=await uploadPhotos(category,docId,photos);
+    if(urls&&urls.length){ await pfEcrire(coll,docId,champ,urls); return {urls:urls,enFile:false}; }
+  }
+  try{
+    await pfAjouter({id:coll+'/'+docId+'/'+champ, coll:coll, docId:docId, category:category,
+                     champ:champ, photos:photos, at:Date.now(), essais:0});
+    return {urls:[],enFile:true};
+  }catch(e){ console.warn('file photos',e); return {urls:[],enFile:false}; }
+}
+var _pfEnCours=false;
+async function pfVider(){
+  if(_pfEnCours||!S.chauffeur||navigator.onLine===false) return;
+  var u=null; try{ u=firebase.auth().currentUser; }catch(e){}
+  if(!u||u.isAnonymous) return;              // l'Apps Script exige un chauffeur connecte
+  _pfEnCours=true;
+  try{
+    var liste=await pfTout();
+    for(var i=0;i<liste.length;i++){
+      var e=liste[i];
+      var urls=await uploadPhotos(e.category,e.docId,e.photos);
+      if(urls&&urls.length){
+        await pfEcrire(e.coll,e.docId,e.champ,urls);
+        await pfRetirer(e.id);
+      }else break;                          // toujours pas de reseau : on reessaiera
+    }
+  }catch(e){ console.warn('vidage file photos',e); }
+  finally{ _pfEnCours=false; }
+}
+window.addEventListener('online',function(){ setTimeout(pfVider,3000); setTimeout(verifierDateServeur,5000); });
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) pfVider(); });
+setInterval(pfVider,180000);
 async function uploadPhotos(category,refId,photos){
   if(!photos||!photos.length)return [];
   /* Delai maximum : au depot, reseau Orange faible, l'envoi pouvait ne jamais
@@ -4295,7 +4480,12 @@ async function uploadPhotos(category,refId,photos){
   const delai=new Promise(function(_,rej){ _tp=setTimeout(function(){ try{ctrl&&ctrl.abort();}catch(e){} rej(new Error('delai photos')); },PHOTO_MAX_MS); });
   try{
     const envoi=(async function(){
-      const res=await fetch(PHOTO_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'uploadPhotos',category,refId,photos}),redirect:'follow',signal:ctrl?ctrl.signal:undefined});
+      /* v89 : l'Apps Script n'accepte plus que les envois d'un chauffeur
+         connecte. On joint le jeton Firebase du compte ; l'Apps Script le
+         fait verifier par Firestore avant d'ecrire dans le Drive. */
+      let idToken='';
+      try{ const u=firebase.auth().currentUser; if(u&&!u.isAnonymous) idToken=await u.getIdToken(); }catch(e){}
+      const res=await fetch(PHOTO_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'uploadPhotos',idToken,category,refId,photos}),redirect:'follow',signal:ctrl?ctrl.signal:undefined});
       return await res.json();
     })();
     const j=await Promise.race([envoi,delai]);
@@ -4326,7 +4516,8 @@ function driveThumb(u, size){
   if(m=s.match(/[?&]id=([\w-]{20,})/)) id=m[1];
   else if(m=s.match(/\/d\/([\w-]{20,})/)) id=m[1];
   else { const g=s.match(/[\w-]{25,}/); if(g) id=g[0]; }
-  return id ? ('https://drive.google.com/thumbnail?id='+id+'&sz=w'+(size||400)) : s;
+  // v89 : hors Drive, seule une adresse http(s) est acceptee (pas de javascript:).
+  return id ? ('https://drive.google.com/thumbnail?id='+id+'&sz=w'+(size||400)) : (/^https?:\/\//i.test(s)?s:'');
 }
 /* ==========================================================================
    SUIVI DU TRAITEMENT PAR LE RESPONSABLE
@@ -4352,11 +4543,11 @@ function suiviRow(r){
 }
 function anoRow(r){
   const ph=(r.photos||[]).filter(Boolean).map(u=>typeof u==='string'?u:(u&&u.url)||'').filter(Boolean);
-  const thumbs=ph.length?'<div class="ano-ph">'+ph.map(u=>`<img src="${driveThumb(u,300)}" loading="lazy" onclick="window.open('${driveThumb(u,1600)}','_blank')">`).join('')+'</div>':'';
+  const thumbs=ph.length?'<div class="ano-ph">'+ph.map(u=>`<img src="${esc(driveThumb(u,300))}" loading="lazy" data-src="${esc(driveThumb(u,1600))}" onclick="window.open(this.dataset.src,'_blank')">`).join('')+'</div>':'';
   return `<div class="glass hist-row">
-    <div class="h1"><b><span class="htype">${r.nature||'Anomalie'}</span>${r.site?(''+r.site).replace(/</g,'&lt;'):''}</b><span class="dt">${frDate(r)}</span></div>
+    <div class="h1"><b><span class="htype">${esc(r.nature||'Anomalie')}</span>${r.site?(''+r.site).replace(/</g,'&lt;'):''}</b><span class="dt">${frDate(r)}</span></div>
     ${r.description?`<div class="meta">${(''+r.description).replace(/</g,'&lt;')}</div>`:''}
-    <div class="meta">Signalé par ${r.chauffeurNom||'—'}</div>
+    <div class="meta">Signalé par ${esc(r.chauffeurNom||'—')}</div>
     ${thumbs}${suiviRow(r)}</div>`;
 }
 async function renderAnoHist(){
@@ -4380,9 +4571,11 @@ async function saveAno(){
   try{
     const ref=db.collection('chauffeurs_anomalies').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()}));
-    let urls=[];
-    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('anomalies',ref.id,photos.map(p=>({data:p.data,type:'photo'})));if(urls.length)await fbWrite(ref.update({photos:urls}));}
-    uiToast(!photos.length?fbMsg(_r,'Anomalie signalée'):(urls.length?'Anomalie + photos envoyées':fbMsg(_r,'Anomalie envoyée (photos non transmises)')),(!photos.length||urls.length)?'ok':'err');
+    let pr={urls:[],enFile:false};
+    if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');pr=await photosOuFile('chauffeurs_anomalies',ref.id,'anomalies',photos.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
+    if(!photos.length) uiToast(fbMsg(_r,'Anomalie signalée'),'ok');
+    else if(pr.urls.length) uiToast('Anomalie + photos envoyées','ok');
+    else alertePhotos(photos.length,pr.urls,'Anomalie',pr.enFile);
     openAno();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
@@ -4403,7 +4596,7 @@ function openRap(){
 function rapRow(r){
   var ph=(r.photos||[]).filter(Boolean).map(function(u){return typeof u==='string'?u:((u&&u.url)||'');}).filter(Boolean);
   var thumbs=ph.length?'<div class="ano-ph">'+ph.map(function(u){
-      return '<img src="'+driveThumb(u,300)+'" loading="lazy" onclick="window.open(\''+driveThumb(u,1600)+'\',\'_blank\')">';
+      return '<img src="'+esc(driveThumb(u,300))+'" loading="lazy" data-src="'+esc(driveThumb(u,1600))+'" onclick="window.open(this.dataset.src,\'_blank\')">';
     }).join('')+'</div>':'';
   return '<div class="glass hist-row">'
     + '<div class="h1"><b><span class="htype">Rapport</span>'+esc(r.objet||'')+'</b><span class="dt">'+frDate(r)+'</span></div>'
@@ -4432,10 +4625,12 @@ async function saveRap(){
   try{
     const ref=db.collection('chauffeurs_rapports').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
-    let urls=[];
-    if(photos.length&&_r==='ok'){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');urls=await uploadPhotos('rapports',ref.id,photos.map(p=>({data:p.data,type:'photo'})));if(urls.length)await fbWrite(ref.update({photos:urls}));}
-    if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');const su=await uploadPhotos('rapports',ref.id,[{data:sig,type:'signature'}]);if(su.length)await fbWrite(ref.update({signature:su[0].url}));}catch(e){}}
-    uiToast(!photos.length?fbMsg(_r,'Rapport envoyé'):(urls.length?'Rapport + photos envoyés':fbMsg(_r,'Rapport envoyé (photos non transmises)')),(!photos.length||urls.length)?'ok':'err');
+    let pr={urls:[],enFile:false};
+    if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');pr=await photosOuFile('chauffeurs_rapports',ref.id,'rapports',photos.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
+    if(_sigDirty){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');await photosOuFile('chauffeurs_rapports',ref.id,'rapports',[{data:sig,type:'signature'}],'signature',_r==='ok');}catch(e){}}
+    if(!photos.length) uiToast(fbMsg(_r,'Rapport envoyé'),'ok');
+    else if(pr.urls.length) uiToast('Rapport + photos envoyés','ok');
+    else alertePhotos(photos.length,pr.urls,'Rapport',pr.enFile);
     openRap();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
@@ -4502,11 +4697,12 @@ async function ppSaveProbleme(){
   try{
     const ref=db.collection('chauffeurs_prise_poste').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:'probleme',probleme:true,detail:det||null,photos:[],nbPhotos:ph.length,at:Date.now()}));
-    let _u=[];
-    if(ph.length&&_r==='ok'){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');_u=await uploadPhotos('prise_poste',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(_u.length)await fbWrite(ref.update({photos:_u}));}
+    let _pr={urls:[],enFile:false};
+    if(ph.length){busy(ph.length===1?'Envoi de la photo…':'Envoi des photos…');_pr=await photosOuFile('chauffeurs_prise_poste',ref.id,'prise_poste',ph.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
+    const _u=_pr.urls;
     // `nbPhotos` reste en base meme si l'envoi echoue : le responsable voit
     // alors « Envoi incomplet » au lieu d'un tiret, et sait qu'une photo manque.
-    if(!alertePhotos(ph.length,_u,'Signalement')) uiToast(fbMsg(_r,'Problème signalé'),'ok');
+    if(!alertePhotos(ph.length,_u,'Signalement',_pr.enFile)) uiToast(fbMsg(_r,'Problème signalé'),'ok');
     ppFinish();
   }catch(e){uiToast('Échec envoi','err');}
   finally{busyDone();}
@@ -4531,13 +4727,12 @@ async function saveEdl(){
   try{
     const ref=db.collection('chauffeurs_edl').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],nbPhotos:ph.length,signature:null,at:Date.now()}));
-    const patch={};
-    let _u=[];
-    if(ph.length&&_r==='ok'){busy('Envoi des photos…');_u=await uploadPhotos('edl',ref.id,ph.map(p=>({data:p.data,type:'photo'})));if(_u.length)patch.photos=_u;}
-    if(_sigDirty&&_r==='ok'){busy('Envoi de la signature…');const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');const u=await uploadPhotos('edl',ref.id,[{data:sig,type:'signature'}]);if(u.length)patch.signature=u[0].url;}
-    if(Object.keys(patch).length)await fbWrite(ref.update(patch));
+    let _pr={urls:[],enFile:false};
+    if(ph.length){busy('Envoi des photos…');_pr=await photosOuFile('chauffeurs_edl',ref.id,'edl',ph.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
+    if(_sigDirty){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');await photosOuFile('chauffeurs_edl',ref.id,'edl',[{data:sig,type:'signature'}],'signature',_r==='ok');}catch(e){}}
+    const _u=_pr.urls;
     markDebutDone();
-    if(!alertePhotos(ph.length,_u,'Déclaration')) uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
+    if(!alertePhotos(ph.length,_u,'Déclaration',_pr.enFile)) uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
     if(_edlMandatory){_edlMandatory=false;openCharge(true);}
     else openEdl();
   }catch(e){uiToast('Échec envoi','err');}
