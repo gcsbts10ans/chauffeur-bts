@@ -944,6 +944,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="sec-title">Fin de journée — <span id="finVeh"></span></div>
     <div class="glass form-card">
       <div id="finChk"></div>
+      <div id="finDesinf"></div>
       <div id="finAno"></div>
       <div class="sub-lbl" style="margin-top:14px">Tableau de bord (3 photos max)</div>
       <input type="file" id="finFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('fin',this,'finThumbs')">
@@ -1153,7 +1154,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v89';
+const APP_VERSION='v90';
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -2063,7 +2064,7 @@ async function pickVehicule(id){
    chargement, quand le chauffeur part reellement en tournee, et s'arrete a
    la cloture. Si l'application est rouverte apres un chargement deja valide
    et avant la cloture, le suivi reprend. */
-function enterHub(){ go('hub'); if(chargeDoneToday() && !finDoneToday()){ startGeo(); demarrerVeilleGeo(); } }
+function enterHub(){ chargerOrg().then(function(){ if(isOn('hub'))renderHub(); }); go('hub'); if(chargeDoneToday() && !finDoneToday()){ startGeo(); demarrerVeilleGeo(); } }
 /* ------------------------------------------------------------------
    Les verrous du jour (EDL fait, cloture faite) etaient uniquement en
    localStorage : cache vide, nouveau telephone ou navigation privee et
@@ -2211,7 +2212,7 @@ async function scanStop(mode){
   if(mode==='qr')return openScanner();
   const ok=await uiConfirm('Validation manuelle',a.client+' — confirmer la dépose ?','Valider la dépose');
   if(!ok)return;
-  const r=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
+  const r=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format,{prevu:prevuDe(a)});
   if(!r)return;
   validateDepose(num,ordre,'manuel',a.client,r);
 }
@@ -2226,8 +2227,12 @@ async function validateDepose(num,ordre,mode,client,rolls){
         rollsDeposes:rolls.deposes||0,rollsRecuperes:rolls.recuperes||0,format:(rolls.format||'roll'),
         // v89 : qui a fait l'arret. Le champ `chauffeur` de la tournee est
         // reecrit a chaque relais : seul l'arret garde le bon nom.
-        chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id}}
+        chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,
+        // v90 : prevu du jour fige sur l'arret, et manque confirme.
+        prevuPropre:(rolls.prevu&&rolls.prevu.p)||0,prevuSale:(rolls.prevu&&rolls.prevu.s)||0,
+        manqueConfirme:rolls.manque?{p:rolls.manque.p||0,s:rolls.manque.s||0,at:Date.now()}:null}}
     },{merge:true}));
+    if(rolls.manque) anomalieManque(client,rolls,'validation');
     uiToast(fbMsg(_r,'Dépose validée — '+(client||'')),'ok');
     go('jour'); // le listener onSnapshot rafraîchira la journée
   }catch(e){uiToast('Erreur enregistrement','err');}
@@ -2289,7 +2294,7 @@ async function askCorrigerRolls(){
   const st=statutArret(num,ordre)||{};
   const r=await demandeRolls(a.client,null,(st.format||a.format),{
     deposes:(st.rollsDeposes||0), recuperes:(st.rollsRecuperes||0),
-    bouton:'Enregistrer la correction'});
+    bouton:'Enregistrer la correction', prevu:prevuDe(a)});
   if(!r)return;
   if((r.deposes||0)===(st.rollsDeposes||0) && (r.recuperes||0)===(st.rollsRecuperes||0)){
     uiToast('Aucun changement','ok'); return;
@@ -2304,8 +2309,12 @@ async function askCorrigerRolls(){
     ancDeposes:(st.rollsDeposes||0), ancRecuperes:(st.rollsRecuperes||0),
     deposes:(r.deposes||0), recuperes:(r.recuperes||0),
     chauffeur:S.chauffeur.id, chauffeurNom:chNom()});
+  if(r.prevu){ maj[base+'prevuPropre']=r.prevu.p||0; maj[base+'prevuSale']=r.prevu.s||0; }
+  maj[base+'manqueConfirme']=r.manque?{p:r.manque.p||0,s:r.manque.s||0,at:Date.now()}:null;
   try{
     var _r=await fbWrite(db.collection('chauffeurs_tournees_statuts').doc(TODAY+'_T'+num).update(maj));
+    var _mc=st.manqueConfirme||null;
+    if(r.manque && !(_mc && _mc.p===(r.manque.p||0) && _mc.s===(r.manque.s||0))) anomalieManque(a.client,r,'correction');
     uiToast(fbMsg(_r,'Rolls corrigés — '+(a.client||'')),'ok');
     go('jour');
   }catch(e){ uiToast('Erreur enregistrement','err'); }
@@ -2352,7 +2361,8 @@ function demandeRolls(client,restants,format,init){
   return new Promise(function(resolve){
     _rollsCtx={deposes:(init&&init.deposes)||0,recuperes:(init&&init.recuperes)||0,
                restants:(restants!=null?restants:null),
-               format:(format==='cabri'?'cabri':'roll')};
+               format:(format==='cabri'?'cabri':'roll'),
+               prevu:(init&&init.prevu)||null};
     _rollsRes=resolve;
     var ov=document.getElementById('rollsOv');
     if(!ov){
@@ -2425,7 +2435,60 @@ function rollsSet(champ,inp){
   rollsInfoPaint();   // pas de rafraichissement des champs : le clavier reste ouvert
 }
 function rollsClose(){ var ov=document.getElementById('rollsOv'); if(ov)ov.classList.remove('on'); }
-function rollsOk(){ var r=_rollsCtx; rollsClose(); var f=_rollsRes; _rollsCtx=null;_rollsRes=null; if(f)f({deposes:r.deposes||0,recuperes:r.recuperes||0,format:r.format||'roll'}); }
+function rollsOk(){
+  var r=_rollsCtx; if(!r)return;
+  var m=manqueRolls(r.prevu,r.deposes||0,r.recuperes||0);
+  if(!m){ rollsFin(r,null); return; }
+  /* v90 : moins que prevu. Le chauffeur confirme ou corrige ; il n'est jamais
+     bloque. L'overlay des rolls passe au-dessus de la modale : on le masque le
+     temps de la question, et on le rouvre tel quel s'il veut corriger. */
+  rollsClose();
+  var cab=(r.format==='cabri');
+  var lignes=[];
+  if(m.p) lignes.push('Prévu '+r.prevu.p+' '+(cab?'cabri'+(r.prevu.p>1?'s':''):'propre'+(r.prevu.p>1?'s':''))+', tu en as saisi '+(r.deposes||0)+'.');
+  if(m.s) lignes.push('Prévu '+r.prevu.s+' sale'+(r.prevu.s>1?'s':'')+', tu en as saisi '+(r.recuperes||0)+'.');
+  var ca=document.getElementById('modalCancel'), anc=ca.textContent;
+  ca.textContent='Corriger';
+  uiConfirm('Moins que prévu',lignes.join(' ')+' Confirmer quand même ?','Confirmer').then(function(ok){
+    ca.textContent=anc;
+    if(!_rollsCtx||_rollsCtx!==r)return;
+    if(ok) rollsFin(r,m);
+    else { var ov=document.getElementById('rollsOv'); if(ov)ov.classList.add('on'); }
+  });
+}
+function rollsFin(r,m){
+  rollsClose(); var f=_rollsRes; _rollsCtx=null;_rollsRes=null;
+  if(f)f({deposes:r.deposes||0,recuperes:r.recuperes||0,format:r.format||'roll',prevu:r.prevu||null,manque:m||null});
+}
+/* v90 : rolls prevus par le responsable pour CE jour (diffusion `publie`,
+   arrets_par_jour du jour). planRolls = propres a deposer, planSale = sales
+   a collecter. 0 ou absent = rien de prevu, donc aucune question posee. */
+function prevuDe(a){
+  if(!a)return null;
+  var p=(typeof a.planRolls==='number'&&a.planRolls>0)?a.planRolls:null;
+  var s=(typeof a.planSale==='number'&&a.planSale>0)?a.planSale:null;
+  return (p||s)?{p:p,s:s}:null;
+}
+function manqueRolls(prevu,dep,rec){
+  if(!prevu)return null;
+  var mp=(prevu.p&&dep<prevu.p)?(prevu.p-dep):0;
+  var ms=(prevu.s&&rec<prevu.s)?(prevu.s-rec):0;
+  return (mp||ms)?{p:mp,s:ms}:null;
+}
+/* Manque confirme -> anomalie automatique, visible dans Signalements cote
+   responsable (meme collection que « Signaler une anomalie »). */
+function anomalieManque(client,rolls,origine){
+  try{
+    var m=rolls&&rolls.manque, pv=rolls&&rolls.prevu; if(!m||!pv)return;
+    var cab=(rolls.format==='cabri'), t=[];
+    if(m.p) t.push((cab?'Cabris':'Propres')+' : prévu '+pv.p+', déposé '+(rolls.deposes||0)+' (manque '+m.p+')');
+    if(m.s) t.push('Sales : prévu '+pv.s+', collecté '+(rolls.recuperes||0)+' (manque '+m.s+')');
+    fbWrite(db.collection('chauffeurs_anomalies').doc().set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),
+      vehicule:(S.vehicule?S.vehicule.id:''),tournee:tourneeJour(),site:client||null,date:TODAY,
+      nature:'Manque de rolls',description:t.join(' · ')+' — confirmé par le chauffeur'+(origine?' ('+origine+')':''),
+      photos:[],lu:false,auto:true,at:Date.now()}));
+  }catch(e){ console.warn('anomalie manque',e); }
+}
 function rollsCancel(){ rollsClose(); var f=_rollsRes; _rollsCtx=null;_rollsRes=null; if(f)f(null); }
 
 /* Rolls reellement a bord a l'instant T, pour la fiche de controle :
@@ -2597,12 +2660,12 @@ async function onScanResult(raw){
     _scanBusy=true;closeScanner();
     const ok=await uiConfirm('Vérifie le site','Ce QR correspond à « '+a.client+' », pas à « '+S.curStop.a.client+' ». Valider quand même la dépose chez « '+a.client+' » ?','Valider');
     if(!ok){_scanBusy=false;return;}
-    const r1=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
+    const r1=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format,{prevu:prevuDe(a)});
     if(!r1){_scanBusy=false;return;}
     return validateDepose(num,a.ordre,'qr',a.client,r1);
   }
   _scanBusy=true;closeScanner();
-  const r2=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format);
+  const r2=await demandeRolls(a.client,(a.format==='cabri'?rollsABord().cabris:rollsABord().propres),a.format,{prevu:prevuDe(a)});
   if(!r2){_scanBusy=false;return;}
   validateDepose(num,a.ordre,'qr',a.client,r2);
 }
@@ -3284,6 +3347,14 @@ async function openCharge(mandatory){
     saveCharge();
     uiToast('Chargement report\u00e9 depuis '+_de,'ok');
   }
+  /* v90 : 1er tour pas encore saisi -> chargement prepare la veille. */
+  CHARGE_PREVU=null;
+  if(_chargeMandatory && (CHARGE.tour||1)===1 && !(CHARGE.propres||CHARGE.cabris)){
+    var _pv=await chargePrevuDuJour();
+    if(_pv && (_pv.propres||_pv.cabris)){
+      CHARGE_PREVU=_pv; CHARGE.propres=_pv.propres||0; CHARGE.cabris=_pv.cabris||0;
+    }
+  }
   renderCharge();
 }
 function renderCharge(){
@@ -3293,6 +3364,7 @@ function renderCharge(){
   document.getElementById('chargeBody').innerHTML=`
     <div class="glass chg-card">
       ${_chargeMandatory?'<div class="chg-q">Combien avez-vous de rolls embarqués ?</div>':''}
+      ${(_chargeMandatory&&CHARGE_PREVU)?'<div style="background:#e7f6ec;color:#15803d;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700;margin-bottom:10px">Préparé '+(CHARGE_PREVU.at?('le '+new Date(CHARGE_PREVU.at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' à '+new Date(CHARGE_PREVU.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' '):'')+'par '+esc(CHARGE_PREVU.parNom||'la tournée de l\u2019après-midi')+(CHARGE_PREVU.vehicule&&CHARGE_PREVU.vehicule!==S.vehicule.id?' (camion '+esc(CHARGE_PREVU.vehicule)+')':'')+'. Vérifie et corrige si besoin.</div>':''}
       <div class="chg-veh"><b>${S.vehicule.id}</b><span>${S.vehicule.type||''}${S.vehicule.prestataire?' · '+S.vehicule.prestataire:''}</span></div>
       ${nt>1?`<div class="chg-tour">Tour ${nt}</div>`:''}
       <div class="chg-lbl">Rolls${nt>1?' — tour '+nt:''}</div>
@@ -3513,6 +3585,7 @@ function renderHub(){
   const unread=unreadCount();
   let banner='';
   if(unread)banner+=`<div class="glass msg-banner" onclick="openMessages()"><div class="mb-ic"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="mb-tx"><b>${unread} message${unread>1?'s':''} non lu${unread>1?'s':''}</b><span>Touche pour lire</span></div><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`;
+  if(estApresMidi()) banner+=`<div class="glass msg-banner" onclick="openJ1()"><div class="mb-ic"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><div class="mb-tx"><b>Chargement pour demain</b><span>Préparer les camions des tournées du matin</span></div></div>`;
   document.getElementById('hubBanner').innerHTML=banner;
   document.getElementById('hubGrid').innerHTML=HUB.map(h=>{
     if(h.type==='direct'){
@@ -4195,10 +4268,170 @@ function finItems(){
   const j=new Date().getDay();
   const nums=(S.tournees||[]).map(t=>String(t.numero));
   return FIN_ITEMS.filter(function(it){
+    if(it.id==='caisse_int') return false;   // v90 : confiee a la tournee de l'apres-midi (desinfCharger)
     if(it.quand!=null && it.quand!==j) return false;
     if(it.tournee && nums.indexOf(String(it.tournee))<0) return false;
     return true;
   });
+}
+/* ==========================================================================
+   TOURNEE DE L'APRES-MIDI (T79 par defaut) — v90, 17/11/2026
+   Les camions roulent aussi l'apres-midi : desinfectee le matin, la caisse se
+   resalissait faute de temps de sechage. La desinfection est donc confiee a
+   la tournee de l'apres-midi, en fin de journee, avant rechargement :
+     · le point « Caisse désinfectée » disparait de la cloture des autres ;
+     · la tournee de l'apres-midi coche, camion par camion, ceux qui ont roule
+       dans la journee. Chaque camion recoit une fiche de cloture dediee
+       (desinfection:true) : le tableau Nettoyages du responsable, son export
+       d'audit et ses corrections la lisent sans changement.
+   Elle charge aussi les camions du lendemain (chauffeurs_chargement_prevu,
+   doc {date J+1}_{camion}) : le chauffeur du matin trouve son chargement du
+   1er tour deja rempli et n'a plus qu'a confirmer ou corriger.
+   La tournee concernee se regle dans l'appli responsable
+   (chauffeurs_config/organisation.tourneeApresMidi).
+   ========================================================================== */
+var ORG={tourneeApresMidi:'79'};
+try{ var _org=JSON.parse(localStorage.getItem('chf_org')||'null'); if(_org&&_org.tourneeApresMidi)ORG=_org; }catch(e){}
+function chargerOrg(){
+  if(!db)return Promise.resolve(ORG);
+  return avecDelai(db.collection('chauffeurs_config').doc('organisation').get(),8000).then(function(d){
+    var x=(d&&d.exists)?(d.data()||{}):{};
+    if(x.tourneeApresMidi){ ORG={tourneeApresMidi:String(x.tourneeApresMidi)}; try{localStorage.setItem('chf_org',JSON.stringify(ORG));}catch(e){} }
+    return ORG;
+  }).catch(function(){ return ORG; });
+}
+function estApresMidi(){
+  var n=String(ORG.tourneeApresMidi||'79').replace(/^T/i,'');
+  return (S.tournees||[]).some(function(t){ return String(t.numero||'').replace(/^T/i,'')===n || String(t.tid)===n; });
+}
+/* --- Desinfection : liste des camions ayant roule aujourd'hui --- */
+var DESINF=[];   // [{id, tours:[libelles], on:bool}]
+async function desinfCharger(){
+  var box=document.getElementById('finDesinf'); if(!box)return;
+  if(!estApresMidi()){ box.innerHTML=''; DESINF=[]; return; }
+  box.innerHTML='<div class="sub-lbl" style="margin-top:6px">Désinfection des caisses</div><div class="msg-empty">Recherche des camions du jour…</div>';
+  var vus={};
+  function aj(v,lib){ if(!v)return; if(!vus[v])vus[v]={id:v,tours:[],on:false}; if(lib&&vus[v].tours.indexOf(lib)<0)vus[v].tours.push(lib); }
+  aj(S.vehicule.id, S.tournees.map(tLabel).join(' + '));
+  try{
+    var r=await Promise.all([
+      avecDelai(db.collection('chauffeurs_chargement').where('date','==',TODAY).limit(60).get(),10000).catch(function(){return {docs:[]};}),
+      avecDelai(db.collection('chauffeurs_tournees_statuts').where('date','==',TODAY).limit(60).get(),10000).catch(function(){return {docs:[]};})
+    ]);
+    r[0].docs.forEach(function(d){ var x=d.data()||{}; aj(x.vehicule,''); });
+    r[1].docs.forEach(function(d){ var x=d.data()||{}; var t=TOURNEES_REF[String(x.tournee)];
+      aj(x.vehicule, t?tLabel(t):(x.tournee?'T'+x.tournee:''));
+      var ar=x.arrets||{}; Object.keys(ar).forEach(function(o){ var a=ar[o]||{}; if(a.vehicule&&a.vehicule!==x.vehicule) aj(a.vehicule, t?tLabel(t):''); });
+    });
+  }catch(e){ console.warn('desinf',e); }
+  DESINF=Object.keys(vus).sort().map(function(k){return vus[k];});
+  desinfRendre();
+}
+function desinfRendre(){
+  var box=document.getElementById('finDesinf'); if(!box)return;
+  var autres=VEHICULES.filter(function(v){ return !DESINF.some(function(d){return d.id===v.id;}); });
+  box.innerHTML='<div class="sub-lbl" style="margin-top:6px">Désinfection des caisses — camions du jour</div>'
+    +DESINF.map(function(d,i){
+      return '<div class="chk-row"><span class="lbl">'+esc(d.id)
+        +(d.tours.length?'<span style="display:block;font-size:12px;font-weight:600;color:var(--sub)">'+esc(d.tours.filter(Boolean).join(' · '))+'</span>':'')
+        +'</span><div class="tgl'+(d.on?' on':'')+'" onclick="DESINF['+i+'].on=!DESINF['+i+'].on;this.classList.toggle(\'on\')"></div></div>';
+    }).join('')
+    +(autres.length?'<div class="fld" style="margin-top:8px"><div class="sel-wrap"><select onchange="desinfAjouter(this.value)">'
+      +'<option value="">+ Ajouter un camion</option>'+autres.map(function(v){return '<option value="'+esc(v.id)+'">'+esc(v.id)+'</option>';}).join('')
+      +'</select></div></div>':'')
+    +'<div style="font-size:12.5px;color:var(--sub);margin:6px 2px 10px">Un camion non coché est noté « non désinfecté » pour le responsable.</div>';
+}
+function desinfAjouter(id){ if(!id)return; DESINF.push({id:id,tours:[],on:false}); desinfRendre(); }
+/* Une fiche par camion, dans la collection des clotures : rien a changer
+   cote responsable pour la lire, l'auditer ou la corriger. */
+function desinfEnregistrer(t1){
+  if(!estApresMidi()||!DESINF.length)return;
+  DESINF.forEach(function(d){
+    try{
+      fbWrite(db.collection('chauffeurs_checklist_fin').doc().set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),
+        vehicule:d.id,tournee:t1,date:TODAY,items:{'Caisse désinfectée':!!d.on},
+        note:'Désinfection par la tournée de l’après-midi',nbPhotos:0,desinfection:true,at:Date.now()}));
+    }catch(e){ console.warn('desinf '+d.id,e); }
+  });
+}
+/* --- Chargement J+1 --- */
+function demainIso(){ return isoAdd(TODAY,1); }
+var J1=[];   // [{vehicule, tournee, propres, cabris, existait}]
+async function openJ1(){
+  var ov=document.getElementById('j1Ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='j1Ov'; ov.className='rolls-ov';
+    ov.innerHTML='<div class="rolls-card" style="max-height:88vh;overflow:auto;width:100%;max-width:440px">'
+      +'<div class="rolls-t">Chargement pour demain</div><div class="rolls-site" id="j1Date"></div>'
+      +'<div id="j1Body"></div>'
+      +'<button class="save-btn" style="margin-top:14px" onclick="saveJ1()">Enregistrer</button>'
+      +'<div onclick="closeJ1()" style="text-align:center;margin-top:12px;color:#6b7280;cursor:pointer;font-size:14px">Fermer</div></div>';
+    document.body.appendChild(ov);
+  }
+  var dm=demainIso();
+  document.getElementById('j1Date').textContent='Pour le '+new Date(dm+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('j1Body').innerHTML='<div class="msg-empty">Chargement…</div>';
+  ov.classList.add('on');
+  var deja={};
+  try{
+    var q=await avecDelai(db.collection('chauffeurs_chargement_prevu').where('date','==',dm).limit(60).get(),10000);
+    q.docs.forEach(function(d){ var x=d.data()||{}; if(x.vehicule)deja[x.vehicule]=x; });
+  }catch(e){ console.warn('j1',e); }
+  J1=VEHICULES.map(function(v){
+    var x=deja[v.id];
+    return {vehicule:v.id, tournee:String(x?x.tournee:((v.tournees||[])[0]||'')), propres:x?(x.propres||0):0, cabris:x?(x.cabris||0):0, existait:!!x};
+  });
+  renderJ1();
+}
+function renderJ1(){
+  var ids=Object.keys(TOURNEES_REF).sort(function(a,b){return tLabel(TOURNEES_REF[a]).localeCompare(tLabel(TOURNEES_REF[b]),'fr',{numeric:true});});
+  document.getElementById('j1Body').innerHTML=J1.length?J1.map(function(r,i){
+    var opts='<option value="">— tournée —</option>'+ids.map(function(t){return '<option value="'+esc(t)+'"'+(String(t)===r.tournee?' selected':'')+'>'+esc(tLabel(TOURNEES_REF[t]))+'</option>';}).join('');
+    var pret=(r.propres||r.cabris)&&r.tournee;
+    return '<div style="border:1px solid rgba(30,60,114,.12);border-radius:12px;padding:10px;margin-top:10px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="flex:1">'+esc(r.vehicule)+'</b>'
+      +'<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;'+(pret?'background:#e7f6ec;color:#16a34a':'background:#f1f3f6;color:#6b7280')+'">'+(pret?'Prêt':'Non chargé')+'</span></div>'
+      +'<div class="sel-wrap" style="margin-bottom:8px"><select onchange="J1['+i+'].tournee=this.value">'+opts+'</select></div>'
+      +'<div style="display:flex;gap:12px">'
+      +'<label style="flex:1;font-size:12px;font-weight:700;color:var(--sub)">Rolls propres<input type="tel" inputmode="numeric" maxlength="3" value="'+(r.propres||'')+'" placeholder="0" oninput="J1['+i+'].propres=lireNombre(this)" style="display:block;width:100%;margin-top:4px;padding:10px;border:1px solid rgba(30,60,114,.2);border-radius:10px;font:inherit;font-size:17px;font-weight:800;text-align:center"></label>'
+      +'<label style="flex:1;font-size:12px;font-weight:700;color:var(--sub)">Cabris<input type="tel" inputmode="numeric" maxlength="3" value="'+(r.cabris||'')+'" placeholder="0" oninput="J1['+i+'].cabris=lireNombre(this)" style="display:block;width:100%;margin-top:4px;padding:10px;border:1px solid rgba(30,60,114,.2);border-radius:10px;font:inherit;font-size:17px;font-weight:800;text-align:center"></label>'
+      +'</div></div>';
+  }).join(''):'<div class="msg-empty">Aucun camion.</div>';
+}
+function closeJ1(){ var ov=document.getElementById('j1Ov'); if(ov)ov.classList.remove('on'); }
+async function saveJ1(){
+  var dm=demainIso(), n=0, sansTournee=0;
+  var ops=[];
+  J1.forEach(function(r){
+    var ref=db.collection('chauffeurs_chargement_prevu').doc(dm+'_'+r.vehicule);
+    if((r.propres||r.cabris)){
+      if(!r.tournee){ sansTournee++; return; }
+      n++;
+      ops.push(fbWrite(ref.set({date:dm,vehicule:r.vehicule,tournee:r.tournee,propres:r.propres||0,cabris:r.cabris||0,
+        par:S.chauffeur.id,parNom:chNom(),parTournee:(S.tournees[0]?String(S.tournees[0].tid):''),at:Date.now()})));
+    } else if(r.existait){ ops.push(fbWrite(ref.delete())); }
+  });
+  if(sansTournee){ uiToast(sansTournee+' camion(s) sans tournée — choisis la tournée','err'); return; }
+  busy('Enregistrement…');
+  try{ await Promise.all(ops); } catch(e){ console.warn('j1 save',e); }
+  finally{ busyDone(); }
+  closeJ1();
+  uiToast(n+' camion'+(n>1?'s':'')+' préparé'+(n>1?'s':'')+' pour demain','ok');
+  renderHub();
+}
+/* Chauffeur du matin : chargement du 1er tour prepare la veille. Par camion
+   d'abord ; sinon par tournee (il a pris un autre camion que prevu). */
+var CHARGE_PREVU=null;
+async function chargePrevuDuJour(){
+  try{
+    var d=await avecDelai(db.collection('chauffeurs_chargement_prevu').doc(TODAY+'_'+S.vehicule.id).get(),8000);
+    if(d&&d.exists) return d.data();
+    var nums=(S.tournees||[]).map(function(t){return String(t.tid);});
+    if(!nums.length) return null;
+    var q=await avecDelai(db.collection('chauffeurs_chargement_prevu').where('date','==',TODAY).limit(60).get(),8000);
+    var x=null; q.docs.forEach(function(doc){ var y=doc.data()||{}; if(!x && nums.indexOf(String(y.tournee))>=0) x=y; });
+    return x;
+  }catch(e){ return null; }
 }
 async function openFin(){
   document.getElementById('finVeh').textContent=S.vehicule.id;
@@ -4208,6 +4441,7 @@ async function openFin(){
   document.getElementById('finChk').innerHTML=finItems().map(it=>`
     <div class="chk-row" data-id="${it.id}"><span class="lbl">${esc(it.label)}</span><div class="tgl" onclick="this.classList.toggle('on')"></div></div>`).join('');
   go('fin');
+  chargerOrg().then(desinfCharger);
 }
 /* Rappel des anomalies REELLEMENT signalees dans la journee, en lieu et
    place de l'ancienne case a cocher « Anomalies signalees ». Celle-ci
@@ -4249,6 +4483,7 @@ async function saveFin(){
     const ph=PH['fin']||[];
     const ref=db.collection('chauffeurs_checklist_fin').doc();
     const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:_t1,date:TODAY,items,note,nbPhotos:ph.length,at:Date.now()}));
+    desinfEnregistrer(_t1);   // v90 : tournee de l'apres-midi, une fiche par camion
     // Photos envoyees seulement si l'enregistrement est bien parti : hors
     // reseau, on ne bloque pas la cloture pour autant.
     if(ph.length){
