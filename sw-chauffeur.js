@@ -4,7 +4,10 @@
      (le cache ne sert que de secours hors-ligne)
    - Librairies CDN (Leaflet, Firebase) : cache d'abord (stables, versionnées)
    Incrémenter CACHE en cas de besoin de purge forcée. */
-const CACHE = 'chauffeur-v92';
+// Fichier nomme sw-chauffeur-test.js = version de test : caches prefixes « test- »,
+// jamais melanges avec ceux de la production (et inversement).
+const PREFIXE = /-test\.js$/i.test(self.location.pathname) ? 'test-chauffeur-' : 'chauffeur-';
+const CACHE = PREFIXE + 'v96';
 const CDN = ['unpkg.com', 'www.gstatic.com'];
 
 self.addEventListener('install', e => {
@@ -14,7 +17,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k.startsWith('chauffeur-') && k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k.startsWith(PREFIXE) && k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });

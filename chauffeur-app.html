@@ -671,6 +671,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
 </style>
 </head>
 <body>
+<div id="bandeauTest" style="display:none;position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:99999;background:#DC2626;color:#fff;font:800 11px 'DM Sans',sans-serif;padding:3px 12px;border-radius:0 0 9px 9px;pointer-events:none;">VERSION DE TEST v95</div>
 <div id="bts-splash" role="status" aria-live="polite">
   <div class="bts-splash-centre">
     <div class="bts-splash-logo logo-gcs"></div>
@@ -842,6 +843,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       <div><h1>Mon planning</h1><p id="planSub">&mdash;</p></div>
       <div class="icobtn" onclick="planChangeName()" title="Changer de nom"><svg viewBox="0 0 24 24" fill="none"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></div>
     </div>
+    <div id="planCpt"></div>
     <div id="planBody"></div>
   </section>
 
@@ -875,6 +877,30 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
   </section>
 
   <!-- ALERTES -->
+  <!-- v95 (lot D1) : MES SIGNALEMENTS — tout ce que le chauffeur a signale, sur tous les camions -->
+  <section class="screen" id="s-messignal">
+    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="sec-title">Mes signalements</div>
+    <div class="meta" style="margin:-4px 4px 12px;color:var(--sub);font-size:13px">Anomalies, problèmes à la prise de poste et rapports — 6 derniers mois, avec la réponse du responsable.</div>
+    <div id="msBody"></div>
+  </section>
+
+  <!-- v95 (lot D2) : DEMANDE D'EPI -->
+  <section class="screen" id="s-epi">
+    <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
+    <div class="sec-title">E.P.I — Tenues / matériels</div>
+    <div class="glass form-card">
+      <div class="fld"><label>Article</label><div class="sel-wrap"><select id="epiArt"></select></div></div>
+      <div class="fld"><label>Taille / pointure</label><input id="epiTaille" placeholder="ex : L, 42, 11"></div>
+      <div class="fld"><label>Quantité</label><input id="epiQte" type="number" inputmode="numeric" min="1" max="20" value="1"></div>
+      <div class="sub-lbl">Ta signature</div>
+      <div class="sig-wrap"><canvas id="epiSig"></canvas><button type="button" class="sig-clear" onclick="clearSig()">Effacer</button></div>
+      <button class="save-btn" onclick="saveEpi()">Envoyer la demande</button>
+    </div>
+    <div class="sec-title" style="margin-top:22px">Mes demandes</div>
+    <div id="epiHist"></div>
+  </section>
+
   <section class="screen" id="s-alertes">
     <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Envoyer une alerte au responsable</div>
@@ -894,10 +920,12 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="back" onclick="go('hub')"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Carburant / AdBlue — <span id="carbVeh"></span></div>
     <div class="glass form-card">
-      <div class="fld"><label>Type de plein</label><div class="sel-wrap"><select id="carbType"><option value="Gasoil">Gasoil</option><option value="AdBlue">AdBlue</option></select></div></div>
-      <div class="fld"><label>Litres</label><input id="carbL" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="fld"><label>Type de plein</label><div class="sel-wrap"><select id="carbType" onchange="carbTypeChange()"><option value="Gasoil">Gasoil</option><option value="AdBlue">AdBlue (pompe)</option><option value="AdBlue bidon">AdBlue bidon</option></select></div></div>
+      <div class="fld"><label id="carbLLab">Litres</label><input id="carbL" type="number" inputmode="decimal" placeholder="0" oninput="carbCout()"></div>
       <div class="fld"><label>Km au compteur</label><input id="carbKm" type="number" inputmode="numeric" placeholder="0"></div>
-      <button class="save-btn" onclick="saveCarburant()">Enregistrer le plein</button>
+      <div class="fld"><label id="carbPrixLab">Prix au litre (€) — facultatif, lu sur le ticket</label><input id="carbPrix" type="number" inputmode="decimal" step="0.001" placeholder="ex : 1,85" oninput="carbCout()"></div>
+      <div id="carbCoutVal" style="display:none;margin:-4px 2px 12px;font-size:15px;font-weight:800;color:#1E5FAD"></div>
+      <button class="save-btn" id="carbBtn" onclick="saveCarburant()">Enregistrer le plein</button>
     </div>
     <div class="sec-title">Derniers pleins</div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -960,7 +988,8 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div class="back" onclick="anoBack()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg> Accueil</div>
     <div class="sec-title">Anomalie tournée — <span id="anoVeh"></span></div>
     <div class="glass form-card">
-      <div class="fld"><label>Nature</label><div class="sel-wrap"><select id="anoType"></select></div></div>
+      <div class="fld"><label>Nature</label><div class="sel-wrap"><select id="anoType" onchange="anoNatureChange()"></select></div></div>
+      <div class="fld" id="anoNbRollsFld" style="display:none"><label>Nombre de rolls abîmés</label><input id="anoNbRolls" type="number" inputmode="numeric" min="1" value="1"></div>
       <div class="fld"><label>Description</label><textarea id="anoDesc" placeholder="Décris l'anomalie…"></textarea></div>
       <div class="fld"><label>Photos (optionnel)</label>
         <input type="file" id="anoFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('ano',this,'anoThumbs')">
@@ -969,7 +998,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
       </div>
       <button class="save-btn" onclick="saveAno()">Signaler l'anomalie</button>
     </div>
-      <div class="sec-title" style="margin-top:22px">Historique — ce camion</div>
+      <div class="sec-title" style="margin-top:22px">Mon historique — ce camion</div>
       <div id="anoHist"></div>
   </section>
 
@@ -1161,7 +1190,11 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    en place. Données sur Firestore (chauffeurs_*, lecture de planning_publie).
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
-const APP_VERSION='v92';
+const EN_TEST=/-test\.html$/i.test(location.pathname);   // fichier *-test.html = version de test (bandeau, service worker a part)
+const APP_VERSION='v96'+(EN_TEST?'-test':'');
+// Version de test = fichier nomme *-test.html (decision Eric 24/11) : bandeau rouge.
+// Renomme sans -test, le meme fichier devient la production, sans autre modification.
+try{ if(EN_TEST){ var _bt=document.getElementById('bandeauTest'); if(_bt)_bt.style.display=''; } }catch(e){}
 /* ==========================================================================
    JUSTIFICATIONS DE LABEL — decisions assumees, relues le 15/09/2026.
    Chacune desactive UN controle, avec sa raison. A relire avant de les
@@ -1271,7 +1304,9 @@ if('serviceWorker' in navigator){
   if(navigator.serviceWorker.controller){
     navigator.serviceWorker.addEventListener('controllerchange',function(){ if(_swReloaded)return; _swReloaded=true; location.reload(); });
   }
-  navigator.serviceWorker.register('sw-chauffeur.js',{updateViaCache:'none'}).then(function(reg){
+  // Test : son propre service worker (sw-chauffeur-test.js), limite a la page de test, pour ne jamais
+  // remplacer celui de la production installe sur les memes telephones.
+  navigator.serviceWorker.register(EN_TEST?'sw-chauffeur-test.js':'sw-chauffeur.js',EN_TEST?{updateViaCache:'none',scope:location.pathname.split('/').pop()}:{updateViaCache:'none'}).then(function(reg){
     try{reg.update();}catch(e){}
     document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{reg.update();}catch(e){} } });
   }).catch(function(){});
@@ -1735,7 +1770,7 @@ function checkUnclosedDays(){
     // 3 jours, puis filtrent cote client. Une soixantaine de documents
     // aujourd'hui, mais rien ne les bornait si la flotte grandit.
     db.collection('chauffeurs_prise_poste').where('date','in',dates).limit(200).get(),
-    db.collection('chauffeurs_edl').where('date','in',dates).limit(200).get(),
+    db.collection('chauffeurs_edl').where('auteur','==',monAuteur()).where('date','in',dates).limit(200).get(),
     db.collection('chauffeurs_checklist_fin').where('date','in',dates).limit(200).get()
   ]).then(([ppS,edlS,finS])=>{
     const mine=S.chauffeur.id, fins=new Set();
@@ -2125,7 +2160,7 @@ async function syncVerrousJour(){
   try{
     const [ppS,edlS,finS]=await Promise.all([
       db.collection('chauffeurs_prise_poste').where('date','==',TODAY).limit(60).get(),
-      db.collection('chauffeurs_edl').where('date','==',TODAY).limit(60).get(),
+      db.collection('chauffeurs_edl').where('auteur','==',monAuteur()).where('date','==',TODAY).limit(60).get(),
       db.collection('chauffeurs_checklist_fin').where('date','==',TODAY).limit(60).get()
     ]);
     let debut=false,fin=false;
@@ -2542,7 +2577,7 @@ function anomalieManque(client,rolls,origine){
     var cab=(rolls.format==='cabri'), t=[];
     if(m.p) t.push((cab?'Cabris':'Propres')+' : prévu '+pv.p+', déposé '+(rolls.deposes||0)+' (manque '+m.p+')');
     if(m.s) t.push('Sales : prévu '+pv.s+', collecté '+(rolls.recuperes||0)+' (manque '+m.s+')');
-    fbWrite(db.collection('chauffeurs_anomalies').doc().set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),
+    fbWrite(db.collection('chauffeurs_anomalies').doc().set({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),
       vehicule:(S.vehicule?S.vehicule.id:''),tournee:tourneeJour(),site:client||null,date:TODAY,
       nature:'Manque de rolls',description:t.join(' · ')+' — confirmé par le chauffeur'+(origine?' ('+origine+')':''),
       photos:[],lu:false,auto:true,at:Date.now()}));
@@ -3124,10 +3159,40 @@ async function planLoad(agentId){
     for(var k=0;k<5;k++){ (function(l){ proms.push(db.collection('planning_publie').doc(l).get().then(function(s){return s.exists?{lundi:l,data:s.data()}:null;}).catch(function(){return null;})); })(isoAdd(lundi,k*7)); }
     var res=await Promise.all(proms);
     _planWeeks=[];
-    res.forEach(function(r){ if(r&&r.data&&r.data.agents&&r.data.agents[agentId])_planWeeks.push({lundi:r.lundi,jours:r.data.agents[agentId].jours||{}}); });
+    var _nomPl='';
+    res.forEach(function(r){ if(r&&r.data&&r.data.agents&&r.data.agents[agentId]){ _planWeeks.push({lundi:r.lundi,jours:r.data.agents[agentId].jours||{}}); if(!_nomPl)_nomPl=r.data.agents[agentId].nom||''; } });
+    planCompteur(_nomPl);
     if(!_planWeeks.length){ body.innerHTML='<div class="plan-msg">Aucune semaine publi\u00e9e pour toi pour l\u2019instant.</div>'; return; }
     renderPlanSlides();
   }catch(e){ body.innerHTML='<div class="plan-msg">Erreur de chargement. R\u00e9essaie plus tard.</div>'; }
+}
+/* v95 (lot D4) : compteur d'heures +/- du chauffeur, MEME formule que
+   bts-responsable, bts-dashboard et planning-gcs :
+     solde initial (soldes_horaires, centiemes h.mm)
+     + heures en plus validees RH non terminees (reste)
+     - recuperations validees RH non terminees (reste).
+   Lecture seule, bornee au nom du chauffeur dans le planning publie. */
+function pcCentMin(v){ var n=parseFloat(String(v==null?'':v).replace(',','.')); if(isNaN(n))return 0; var sg=n<0?-1:1; n=Math.abs(n); var h=Math.floor(n),m=Math.round((n-h)*100); return sg*(h*60+m); }
+function pcFmt(min){ var sg=min<0?'−':(min>0?'+':''); min=Math.abs(Math.round(min)); var h=Math.floor(min/60),m=min%60; return sg+h+'h'+(m<10?'0':'')+m; }
+async function planCompteur(nom){
+  var box=document.getElementById('planCpt'); if(!box)return;
+  if(!nom){ box.innerHTML=''; return; }
+  box.innerHTML='<div class="glass hist-row"><div class="meta">Compteur d’heures…</div></div>';
+  try{
+    var r=await Promise.all([
+      db.collection('soldes_horaires').where('nom','==',nom).limit(5).get(),
+      db.collection('rh_heures_sup').where('agent','==',nom).limit(300).get(),
+      db.collection('rh_recuperations').where('agent','==',nom).limit(300).get()]);
+    var total=0, attente=0;
+    r[0].forEach(function(d){ total+=pcCentMin((d.data()||{}).solde); });
+    [[r[1],1],[r[2],-1]].forEach(function(z){ z[0].forEach(function(d){ var x=d.data()||{}, du=+x.dureeMinutes||0;
+      var fait=z[1]>0?(+x.minutesTraitees||0):(+x.heuresRecupees||0), reste=Math.max(0,du-fait);
+      if(x.valideRH===true&&x.statut!=='termine') total+=z[1]*reste; else if(x.statut!=='termine'&&x.valideRH!==true) attente++; }); });
+    var col=total>0?'#15803d':(total<0?'#dc2626':'#64748b'), lib=total>0?'à récupérer':(total<0?'en dette':'à jour');
+    box.innerHTML='<div class="glass hist-row" style="display:flex;justify-content:space-between;align-items:center">'
+      +'<div><b>Mon compteur d’heures</b><div class="meta">'+lib+(attente?' · '+attente+' en attente de validation RH':'')+'</div></div>'
+      +'<div style="font-size:24px;font-weight:800;color:'+col+'">'+pcFmt(total)+'</div></div>';
+  }catch(e){ console.warn('compteur',e); box.innerHTML='<div class="glass hist-row"><div class="meta">Compteur d’heures indisponible</div></div>'; }
 }
 function renderPlanSlides(){
   var today=new Date(); today.setHours(12,0,0,0); var todayIso=today.toISOString().slice(0,10);
@@ -3669,6 +3734,8 @@ function renderControle(){
 const MODULES=[
  {id:'jour',label:'Ma tournée',col:'',ic:'<path d="M9 20l-5-2V4l5 2 6-2 5 2v14l-5-2-6 2z"/><path d="M9 6v14M15 4v14"/>'},
  {id:'messages',label:'Messagerie',col:'c-msg',ic:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'},
+ {id:'epi',label:'E.P.I',col:'c-doc',ic:'<path d="M20.4 6.6 16 4l-1.5 2h-5L8 4 3.6 6.6 5 11l2-1v10h10V10l2 1z"/>'},
+ {id:'messignal',label:'Mes signalements',col:'c-doc',ic:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'},
  {id:'alertes',label:'Alertes',col:'c-alert',ic:'<path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.4"/>'},
  {id:'charge',label:'Chargement',col:'c-load',ic:'<path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 7l-3 7a3 3 0 0 0 6 0z"/><path d="M17 7l3 7a3 3 0 0 1-6 0z"/>'},
  {id:'controle',label:'Fiche contrôle',col:'c-ok',ic:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'},
@@ -3686,9 +3753,10 @@ const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
  {type:'direct',id:'charge',label:'Chargement'},
  {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','rapport','controle','arrete']},
- {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes']},
+ {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes','messignal']},
  {type:'direct',id:'fin',label:'Fin de journée'},
- {type:'direct',id:'planning',label:'Mon planning'}
+ {type:'direct',id:'planning',label:'Mon planning'},
+ {type:'direct',id:'epi',label:'E.P.I'}
 ];
 function modOf(id){return MODULES.find(m=>m.id===id);}
 function appHtml(m,cls){return `<div class="app ${m.col} ${cls||''}"><svg viewBox="0 0 24 24">${m.ic}</svg></div>`;}
@@ -3759,6 +3827,8 @@ function openModule(id){
   if(id==='jour'){go('jour');return;}
   if(id==='messages'){openMessages();return;}
   if(id==='alertes'){renderAlertes();go('alertes');return;}
+  if(id==='messignal'){openMesSignal();return;}
+  if(id==='epi'){openEpi();return;}
   if(id==='charge'){openCharge(false);return;}
   if(id==='controle'){openControle();return;}
   if(id==='arrete'){go('arrete');return;}
@@ -4160,6 +4230,12 @@ async function sendAlerte(){
 
 /* ======================= LOT 3 : VÉHICULE ======================= */
 function chNom(){return (S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||'');}
+/* v95 (lot D1, verrouillage decide par Eric le 23/11) : anomalies, rapports
+   et sinistres portent `auteur` = identifiant du compte agent connecte
+   ({agentId}@agents.gcsbts.fr). Les regles Firestore ne laissent un
+   chauffeur lire QUE les declarations dont il est l'auteur : toute requete
+   sur ces collections doit donc filtrer sur auteur == moi. */
+function monAuteur(){ try{ var u=firebase.auth().currentUser; return (u&&u.email)?u.email.split('@')[0]:''; }catch(e){ return ''; } }
 function frDate(r){return r.at?new Date(r.at).toLocaleDateString('fr-FR'):(r.date||'');}
 // Historique conservé/affiché : 6 derniers mois
 var HIST_MOIS=6;
@@ -4168,9 +4244,12 @@ function histCutoff(){return Date.now()-HIST_MOIS*30.44*24*3600*1000;}
 // et bascule automatiquement sur un repli trié en local si l'index composite
 // n'existe pas encore. Une fois les index créés, le repli ne sert plus.
 var _histNoIndex={};
+var HIST_PERSO={chauffeurs_anomalies:1,chauffeurs_rapports:1,chauffeurs_edl:1,chauffeurs_epi:1};
 async function histQuery(coll,max){
   if(!S.vehicule||!S.vehicule.id)return [];   // sécurité : aucun véhicule sélectionné
   var ref=db.collection(coll).where('vehicule','==',S.vehicule.id);
+  // v95 (D1) : collections verrouillees -> seulement mes declarations sur ce camion.
+  if(HIST_PERSO[coll]) ref=ref.where('auteur','==',monAuteur());
   // 1. Version optimale si l'index composite (vehicule + at) existe : ~max lectures.
   if(!_histNoIndex[coll]){
     try{
@@ -4243,12 +4322,13 @@ function renderCarbHist(){
   var el=document.getElementById('carbHist');if(!el)return;
   var ft=document.getElementById('carbFType').value,fm=document.getElementById('carbFMois').value;
   var rows=_pleins.filter(function(r){return (!ft||(r.type||'Gasoil')===ft)&&(!fm||moisKeyCarb(r)===fm);});
-  el.innerHTML=rows.length?rows.map(function(r){return '<div class="glass hist-row"><div class="h1"><b>'+r.litres+' L</b><span class="dt">'+frDate(r)+'</span></div><div class="meta"><span class="carb-tag '+(r.type==='AdBlue'?'ad':'')+'">'+(r.type||'Gasoil')+'</span>'+(r.km?' · '+r.km+' km':'')+'</div></div>';}).join(''):'<div class="msg-empty">Aucun plein</div>';
+  el.innerHTML=rows.length?rows.map(function(r){return '<div class="glass hist-row"><div class="h1"><b>'+r.litres+' L</b><span class="dt">'+frDate(r)+'</span></div><div class="meta"><span class="carb-tag '+(r.type==='AdBlue'?'ad':'')+'">'+(r.conditionnement==='bidon'?'AdBlue bidon':(r.type||'Gasoil'))+'</span>'+(r.km?' · '+r.km+' km':'')+(r.prixLitre?' · '+String(r.prixLitre).replace('.',',')+' €/L':'')+(carbCoutLigne(r)?' · <b>'+carbCoutLigne(r)+'</b>':'')+'</div></div>';}).join(''):'<div class="msg-empty">Aucun plein</div>';
 }
 async function openCarburant(){
   document.getElementById('carbVeh').textContent=S.vehicule.id;
   document.getElementById('carbType').value='Gasoil';
   document.getElementById('carbL').value='';document.getElementById('carbKm').value=curKm();
+  document.getElementById('carbPrix').value='';carbTypeChange();
   document.getElementById('carbFType').value='';document.getElementById('carbFMois').value='';
   go('carburant');
   var el=document.getElementById('carbHist');el.innerHTML='<div class="msg-empty">Chargement…</div>';
@@ -4259,27 +4339,44 @@ async function openCarburant(){
   renderCarbHist();
 }
 async function saveCarburant(){
-  const TYPE=document.getElementById('carbType').value||'Gasoil';
+  const BIDON=carbEstBidon();
+  const TYPE=BIDON?'AdBlue':(document.getElementById('carbType').value||'Gasoil');
   const L=parseFloat(document.getElementById('carbL').value);
   if(!L||L<=0){uiToast('Indique les litres','err');return;}
   const KM=parseInt(document.getElementById('carbKm').value,10)||null;
+  // v94 (C2) : prix au litre facultatif, lu sur le ticket. Le responsable
+  // peut le completer ou le corriger ensuite (correction tracee).
+  const _px=parseFloat(String(document.getElementById('carbPrix').value||'').replace(',','.'));
+  let PRIX=null, TOTAL=null;
+  if(BIDON){
+    // v96 : bidon — prix paye obligatoire, prix au litre calcule.
+    if(!(_px>0)){uiToast('Indique le prix payé','err');return;}
+    if(_px>500){uiToast('Prix payé incorrect','err');return;}
+    TOTAL=Math.round(_px*100)/100; PRIX=Math.round(TOTAL/L*1000)/1000;
+  } else {
+    PRIX=(_px>0&&_px<10)?Math.round(_px*1000)/1000:null;
+    if(document.getElementById('carbPrix').value&&PRIX===null){uiToast('Prix au litre incorrect','err');return;}
+  }
+  const LIB=BIDON?'AdBlue bidon':TYPE;
   if(_carbEnCours)return;
   const _al=alertesPlein(TYPE,L,KM);
   const ok=_al.length
     ? await uiConfirm('V\u00e9rifie ta saisie',_al.join(' ')+' Corrige si c\u2019est une erreur de frappe.','Enregistrer quand m\u00eame')
-    : await uiConfirm('Enregistrer le plein',TYPE+' · '+L+' L'+' sur '+S.vehicule.id+' ?','Enregistrer');
+    : await uiConfirm(BIDON?'Enregistrer l\u2019achat':'Enregistrer le plein',LIB+' · '+L+' L'+(BIDON?' · '+TOTAL.toFixed(2).replace('.',',')+' \u20ac':'')+' sur '+S.vehicule.id+' ?','Enregistrer');
   if(!ok)return;
   _carbEnCours=true;
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_carburant').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()}));
+    const _doc={chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:TYPE,litres:L,km:KM,prixLitre:PRIX,at:Date.now()};
+    if(BIDON){ _doc.conditionnement='bidon'; _doc.prixTotal=TOTAL; }
+    const _r=await fbWrite(db.collection('chauffeurs_carburant').add(_doc));
     setCurKm(KM);
     // Insertion locale : relire les 200 derniers pleins apres chaque saisie
     // coutait 200 lectures pour une ligne qu'on connait deja.
-    _pleins.unshift({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,type:TYPE,litres:L,km:KM,at:Date.now()});
-    document.getElementById('carbL').value='';
+    _pleins.unshift(Object.assign({},_doc));
+    document.getElementById('carbL').value='';document.getElementById('carbPrix').value='';carbCout();
     document.getElementById('carbKm').value=curKm();
     remplirMoisCarb();renderCarbHist();
-    uiToast(fbMsg(_r,TYPE+' enregistré'),'ok');
+    uiToast(fbMsg(_r,LIB+' enregistré'),'ok');
   }catch(e){uiToast('Échec enregistrement','err');}
   finally{ _carbEnCours=false; }
 }
@@ -4328,7 +4425,22 @@ function openEntretien(){
   sel.innerHTML='<option value="">— Choisir —</option>'+ENTRETIEN_TYPES.map(t=>`<option>${t}</option>`).join('');
   sel.value='';
   go('entretien');
+  // v96 : statut relu a chaque ouverture. Le cache gardait l'etat du premier
+  // affichage tant qu'on ne changeait pas de camion : un entretien termine
+  // par le responsable restait « en attente » sur le telephone.
+  _entRows=null;
   renderEntretien();
+}
+/* v96 (24/11/2026) : retour du statut de l'entretien sur le telephone.
+   Le responsable fait avancer l'intervention (Planifiee / En cours /
+   Terminee, champ `etape`, date prevue `datePrevue`) : le chauffeur voit
+   ou en est son camion. */
+function entStatutHtml(r,clos){
+  var pill=function(t,bg,fg){return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;background:'+bg+';color:'+fg+'">'+t+'</span>';};
+  if(clos) return '<div class="meta" style="margin-top:6px">'+pill('Entretien fait','#dcfce7','#166534')+(r.clotureNom?' validé par '+esc(r.clotureNom):'')+'</div>';
+  if(r.etape==='encours') return '<div class="meta" style="margin-top:6px">'+pill('En cours au garage','#fef3c7','#92400e')+'</div>';
+  if(r.datePrevue) return '<div class="meta" style="margin-top:6px">'+pill('Planifié le '+new Date(r.datePrevue+'T12:00:00').toLocaleDateString('fr-FR'),'#dbeafe','#1E5FAD')+'</div>';
+  return '<div class="meta" style="margin-top:8px;color:#b45309;font-weight:600">En attente — le responsable logistique valide la réparation</div>';
 }
 function entRow(r,withBtn){
   const clos=r.statut&&r.statut!=='ouvert';
@@ -4338,9 +4450,9 @@ function entRow(r,withBtn){
   return `<div class="glass hist-row">
     <div class="h1"><b><span class="htype">${esc(r.type||'')}</span>${r.km?r.km+' km':''}</b><span class="dt">${clos&&dRep?('Réparé le '+dRep):('Demandé le '+dDem)}</span></div>
     ${clos&&dRep?`<div class="meta">Demande du ${dDem}</div>`:''}
-    ${(clos&&r.clotureNom)?`<div class="meta">Validé par ${r.clotureNom}</div>`:''}
-    ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}
-    ${withBtn?`<div class="meta" style="margin-top:8px;color:#b45309;font-weight:600">En attente — le responsable logistique valide la réparation</div>`:''}</div>`;
+    ${entStatutHtml(r,clos)}
+    ${r.intervention?`<div class="meta">${esc(r.intervention)}</div>`:''}
+    ${r.note?`<div class="meta">${(r.note||'').replace(/</g,'&lt;')}</div>`:''}</div>`;
 }
 // Cache des tickets du vehicule courant : evite de relire jusqu'a 400 docs
 // apres chaque demande d'intervention. Invalide au changement de camion.
@@ -4649,7 +4761,7 @@ async function finAnomalies(){
   box.innerHTML='';
   try{
     const q=await db.collection('chauffeurs_anomalies')
-      .where('chauffeur','==',S.chauffeur.id).where('date','==',TODAY).limit(20).get();
+      .where('auteur','==',monAuteur()).where('date','==',TODAY).limit(20).get();
     const n=q.size;
     box.innerHTML = n
       ? '<div class="fin-ano ok">'+n+' anomalie'+(n>1?'s':'')+' signal\u00e9e'+(n>1?'s':'')+' aujourd\u2019hui.</div>'
@@ -4961,7 +5073,7 @@ function busy(msg){document.getElementById('busyMsg').textContent=msg||'Envoi…
 function busyDone(){document.getElementById('busy').classList.remove('show');}
 
 /* --- Anomalies tournée --- */
-const ANO_TYPES=['Accès impossible','Linge manquant','Linge non conforme','Roll/chariot abîmé','Retard livraison','Problème véhicule','Autre'];
+const ANO_TYPES=['Accès impossible','Changement de code','Linge manquant','Linge non conforme','Roll/chariot abîmé','Retard livraison','Problème véhicule','Autre'];
 let _anoSite='';
 function openAno(site){
   _anoSite=site||'';
@@ -4970,6 +5082,7 @@ function openAno(site){
   PH['ano']=[];renderThumbs('ano','anoThumbs');
   const sel=document.getElementById('anoType');
   sel.innerHTML='<option value="">— Choisir —</option>'+ANO_TYPES.map(t=>`<option>${t}</option>`).join('');sel.value='';
+  anoNatureChange();
   go('anomalies');
   renderAnoHist();
 }
@@ -5014,6 +5127,126 @@ function anoRow(r){
     <div class="meta">Signalé par ${esc(r.chauffeurNom||'—')}</div>
     ${thumbs}${suiviRow(r)}</div>`;
 }
+/* v95 (lot D1) : « Mes signalements ». Lit les declarations DU CHAUFFEUR
+   (champ chauffeur), tous camions confondus. Requete optimale avec l'index
+   chauffeur + at ; repli sans index (egalite seule, tri dans l'appli). */
+var _msNoIndex={};
+async function msQuery(coll){
+  var cut=Date.now()-183*86400000;
+  var ref=HIST_PERSO[coll]?db.collection(coll).where('auteur','==',monAuteur()):db.collection(coll).where('chauffeur','==',S.chauffeur.id);
+  if(!_msNoIndex[coll]){
+    try{ var s=await ref.orderBy('at','desc').limit(40).get(); return s.docs.map(function(d){return Object.assign({id:d.id},d.data());}); }
+    catch(e){ _msNoIndex[coll]=1; console.warn('[INDEX MANQUANT] '+coll+' chauffeur(asc)+at(desc) — repli',e&&e.message); }
+  }
+  var s2=await ref.limit(300).get();
+  return s2.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(x){return (x.at||0)>=cut;});
+}
+function msEtape(st){ return st==='Traité'?3:(st==='En cours'?2:1); }
+function msRow(r){
+  var st=r.statut||(r.lu?'Traité':'Nouveau');
+  var lib={1:['Envoyé','#64748b'],2:['En cours','#b45309'],3:['Traité','#15803d']}[msEtape(st)];
+  var n=msEtape(st);
+  var steps='<div style="display:flex;gap:5px;margin-top:8px">'+[1,2,3].map(function(k){return '<span style="flex:1;height:6px;border-radius:3px;background:'+(k<=n?'#16a34a':'#e5e7eb')+'"></span>';}).join('')+'</div>';
+  var hist=(Array.isArray(r.suivi)?r.suivi:[]).filter(function(x){return x&&x.note;}).sort(function(a,b){return (a.at||0)-(b.at||0);});
+  var notes=hist.length?hist.map(function(x){return '<div class="sv-note">'+esc(x.par||'')+(x.at?' · '+new Date(x.at).toLocaleDateString('fr-FR'):'')+' : '+esc(x.note)+'</div>';}).join('')
+           :(r.note?'<div class="sv-note">'+esc(r.traitePar||'')+(r.traitePar?' : ':'')+esc(r.note)+'</div>':'');
+  return '<div class="glass hist-row"><div class="h1"><b><span class="htype">'+esc(r._lib)+'</span>'+esc(r._objet)+'</b><span class="dt">'+frDate(r)+'</span></div>'
+    +(r._detail?'<div class="meta">'+esc(r._detail)+'</div>':'')
+    +'<div class="meta">'+esc(r.vehicule||'')+' · <b style="font-size:12px;color:'+lib[1]+'">'+lib[0]+'</b></div>'
+    +steps+notes+'</div>';
+}
+async function openMesSignal(){
+  go('messignal');
+  var box=document.getElementById('msBody');
+  box.innerHTML='<div class="msg-empty">Chargement…</div>';
+  try{
+    var R=await Promise.all([msQuery('chauffeurs_anomalies'),msQuery('chauffeurs_prise_poste'),msQuery('chauffeurs_rapports')]);
+    var L=[].concat(
+      R[0].map(function(x){return Object.assign(x,{_lib:'Anomalie',_objet:(x.nature||'Anomalie')+(x.nbRolls>0?' ('+x.nbRolls+')':''),_detail:(x.site?'['+x.site+'] ':'')+(x.description||'')});}),
+      R[1].filter(function(x){return x.probleme===true;}).map(function(x){return Object.assign(x,{_lib:'Prise de poste',_objet:x.estRemorque?'Problème remorque':'Problème véhicule',_detail:x.detail||''});}),
+      R[2].map(function(x){return Object.assign(x,{_lib:'Rapport',_objet:x.objet||'Rapport circonstancié',_detail:x.description||''});})
+    ).sort(function(a,b){return (b.at||0)-(a.at||0);});
+    box.innerHTML=L.length?L.map(msRow).join(''):'<div class="msg-empty">Aucun signalement sur les 6 derniers mois</div>';
+  }catch(e){console.warn('mes signalements',e);box.innerHTML='<div class="msg-empty">Lecture impossible — vérifie la connexion</div>';}
+}
+/* v95 (lot D2) : demande d'EPI signee. Collection chauffeurs_epi, verrouillee
+   comme les declarations : le chauffeur ne cree et ne lit que les siennes
+   (champ auteur). Statut pose par le responsable : Valide / Rupture. */
+var EPI_ART_DEF=['T-shirt','Polo','Pantalon','Chaussures de sécurité','Gant','Veste sans capuche','Veste avec capuche','Lampe frontale'];
+var _epiEnCours=false;
+function openEpi(){
+  var sel=document.getElementById('epiArt');
+  var remplir=function(L){ sel.innerHTML='<option value="">— Choisir —</option>'+L.map(function(a){return '<option>'+esc(a)+'</option>';}).join(''); };
+  remplir(EPI_ART_DEF);
+  avecDelai(db.collection('chauffeurs_config').doc('epi').get(),8000).then(function(d){ var a=d.exists?d.data().articles:null; if(Array.isArray(a)&&a.length)remplir(a); }).catch(function(){});
+  document.getElementById('epiTaille').value='';document.getElementById('epiQte').value='1';
+  _sigDirty=false;
+  go('epi');
+  setTimeout(function(){initSig('epiSig');},80);
+  renderEpiHist();
+}
+// Signature reduite (300 x 100) : quelques Ko dans le document, lisible au PDF.
+function sigReduite(c){ var o=document.createElement('canvas'); o.width=300; o.height=100; var x=o.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,300,100); x.drawImage(c,0,0,300,100); return o.toDataURL('image/png'); }
+async function saveEpi(){
+  if(_epiEnCours)return;
+  var art=document.getElementById('epiArt').value, taille=(document.getElementById('epiTaille').value||'').trim();
+  var q=parseInt(document.getElementById('epiQte').value,10);
+  if(!art){uiToast('Choisis l’article','err');return;}
+  if(!(q>=1&&q<=20)){uiToast('Quantité entre 1 et 20','err');return;}
+  if(!_sigDirty||!_sigEl){uiToast('Signe ta demande','err');return;}
+  var ok=await uiConfirm('Demande d’EPI',art+(taille?' · '+taille:'')+' · ×'+q+' ?','Envoyer');
+  if(!ok)return;
+  _epiEnCours=true;busy('Envoi de la demande…');
+  try{
+    var _r=await fbWrite(db.collection('chauffeurs_epi').doc().set({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),
+      date:TODAY,article:art,taille:taille,quantite:q,signature:sigReduite(_sigEl),statut:'En attente',at:Date.now()}));
+    busyDone();uiToast(fbMsg(_r,'Demande envoyée'),'ok');
+    clearSig();document.getElementById('epiTaille').value='';document.getElementById('epiQte').value='1';
+    renderEpiHist();
+  }catch(e){busyDone();uiToast('Envoi impossible — réessaie','err');}
+  finally{_epiEnCours=false;}
+}
+async function renderEpiHist(){
+  var box=document.getElementById('epiHist'); if(!box)return;
+  box.innerHTML='<div class="msg-empty">Chargement…</div>';
+  try{
+    var L=(await msQuery('chauffeurs_epi')).filter(function(x){return !x.supprime;}).sort(function(a,b){return (b.at||0)-(a.at||0);}).slice(0,20);
+    var col={'En attente':'#b45309','Validé':'#15803d','Rupture':'#dc2626'};
+    box.innerHTML=L.length?L.map(function(x){
+      return '<div class="glass hist-row"><div class="h1"><b>'+esc(x.article||'')+(x.taille?' · '+esc(x.taille):'')+' · ×'+(x.quantite||1)+'</b><span class="dt">'+frDate(x)+'</span></div>'
+        +'<div class="meta"><b style="color:'+(col[x.statut]||'#64748b')+'">'+esc(x.statut||'En attente')+'</b>'+(x.statutPar?' · '+esc(x.statutPar):'')+'</div>'
+        +(x.note?'<div class="sv-note">'+esc(x.note)+'</div>':'')+'</div>';
+    }).join(''):'<div class="msg-empty">Aucune demande</div>';
+  }catch(e){console.warn('epi hist',e);box.innerHTML='<div class="msg-empty">Lecture impossible</div>';}
+}
+/* v95 (maquette Jhon) : cout du plein = litres x prix au litre, affiche en
+   direct pendant la saisie et dans l'historique des pleins. */
+function carbCoutDe(L,px){ L=parseFloat(String(L==null?'':L).replace(',','.')); px=parseFloat(String(px==null?'':px).replace(',','.'));
+  if(!(L>0)||!(px>0&&px<10))return ''; return (Math.round(L*px*100)/100).toFixed(2).replace('.',',')+' \u20ac'; }
+/* v96 (24/11/2026) : AdBlue achete en BIDON. Le chauffeur saisit les litres
+   du bidon et le PRIX PAYE (obligatoire) ; le prix au litre est calcule.
+   Ecrit : type 'AdBlue', conditionnement 'bidon', prixTotal, prixLitre. */
+function carbEstBidon(){ var t=document.getElementById('carbType'); return !!t && t.value==='AdBlue bidon'; }
+function carbTypeChange(){
+  var b=carbEstBidon();
+  document.getElementById('carbLLab').textContent=b?'Litres du bidon':'Litres';
+  document.getElementById('carbPrixLab').textContent=b?'Prix payé (€) — obligatoire':'Prix au litre (€) — facultatif, lu sur le ticket';
+  document.getElementById('carbPrix').placeholder=b?'ex : 25,90':'ex : 1,85';
+  document.getElementById('carbBtn').textContent=b?'Enregistrer l\u2019achat':'Enregistrer le plein';
+  carbCout();
+}
+function carbCout(){ var el=document.getElementById('carbCoutVal'); if(!el)return;
+  var c;
+  if(carbEstBidon()){
+    var L=parseFloat(String(document.getElementById('carbL').value||'').replace(',','.')), P=parseFloat(String(document.getElementById('carbPrix').value||'').replace(',','.'));
+    c=(L>0&&P>0)?'Soit '+(Math.round(P/L*100)/100).toFixed(2).replace('.',',')+' \u20ac / L':'';
+    el.textContent=c;
+  } else {
+    c=carbCoutDe(document.getElementById('carbL').value,document.getElementById('carbPrix').value);
+    el.textContent=c?'Prix : '+c:'';
+  }
+  el.style.display=c?'':'none'; }
+function carbCoutLigne(r){ if(typeof r.prixTotal==='number'&&r.prixTotal>0) return r.prixTotal.toFixed(2).replace('.',',')+' \u20ac'; return carbCoutDe(r.litres,r.prixLitre); }
 async function renderAnoHist(){
   const box=document.getElementById('anoHist');
   if(!box)return;
@@ -5024,17 +5257,25 @@ async function renderAnoHist(){
     box.innerHTML=rows.length?rows.map(anoRow).join(''):'<div class="msg-empty">Aucune anomalie signalée</div>';
   }catch(e){console.warn('ano hist',e);box.innerHTML='<div class="msg-empty">Lecture impossible</div>';}
 }
+/* v93 (lot C1) : nombre de rolls abimes, compte dans « Gestion des rolls ». */
+var ANO_ROLL='Roll/chariot abîmé';
+function anoNatureChange(){
+  var on=(document.getElementById('anoType').value===ANO_ROLL);
+  document.getElementById('anoNbRollsFld').style.display=on?'':'none';
+  if(on&&!(parseInt(document.getElementById('anoNbRolls').value,10)>0))document.getElementById('anoNbRolls').value='1';
+}
 async function saveAno(){
   const nature=document.getElementById('anoType').value;
   if(!nature){uiToast('Choisis la nature','err');return;}
   const desc=(document.getElementById('anoDesc').value||'').trim();
   const photos=PH['ano']||[];
-  const ok=await uiConfirm('Signaler l\'anomalie',nature+(_anoSite?' · '+_anoSite:'')+(photos.length?' · '+photos.length+' photo(s)':'')+' sur '+S.vehicule.id+' ?','Signaler');
+  const nbRolls=(nature===ANO_ROLL)?Math.max(1,parseInt(document.getElementById('anoNbRolls').value,10)||1):null;
+  const ok=await uiConfirm('Signaler l\'anomalie',nature+(nbRolls?' · '+nbRolls+' roll'+(nbRolls>1?'s':''):'')+(_anoSite?' · '+_anoSite:'')+(photos.length?' · '+photos.length+' photo(s)':'')+' sur '+S.vehicule.id+' ?','Signaler');
   if(!ok)return;
   busy(photos.length?'Envoi de l\'anomalie…':'Envoi de l\'anomalie…');
   try{
     const ref=db.collection('chauffeurs_anomalies').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),site:_anoSite||null,date:TODAY,nature,description:desc,photos:[],lu:false,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),site:_anoSite||null,date:TODAY,nature,nbRolls:nbRolls,description:desc,photos:[],lu:false,at:Date.now()}));
     let pr={urls:[],enFile:false};
     if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');pr=await photosOuFile('chauffeurs_anomalies',ref.id,'anomalies',photos.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
     if(!photos.length) uiToast(fbMsg(_r,'Anomalie signalée'),'ok');
@@ -5088,7 +5329,7 @@ async function saveRap(){
   busy('Envoi du rapport…');
   try{
     const ref=db.collection('chauffeurs_rapports').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,objet,description:desc,photos:[],lu:false,at:Date.now()}));
     let pr={urls:[],enFile:false};
     if(photos.length){busy(photos.length===1?'Envoi de la photo…':'Envoi des '+photos.length+' photos…');pr=await photosOuFile('chauffeurs_rapports',ref.id,'rapports',photos.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
     if(_sigDirty){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('rapSig')).toDataURL('image/png');await photosOuFile('chauffeurs_rapports',ref.id,'rapports',[{data:sig,type:'signature'}],'signature',_r==='ok');}catch(e){}}
@@ -5279,7 +5520,7 @@ async function saveEdl(){
   busy('Envoi de la déclaration…');
   try{
     const ref=db.collection('chauffeurs_edl').doc();
-    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],nbPhotos:ph.length,signature:null,at:Date.now()}));
+    const _r=await fbWrite(ref.set({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:rem,photos:[],nbPhotos:ph.length,signature:null,at:Date.now()}));
     let _pr={urls:[],enFile:false};
     if(ph.length){busy('Envoi des photos…');_pr=await photosOuFile('chauffeurs_edl',ref.id,'edl',ph.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok');}
     if(_sigDirty){busy('Envoi de la signature…');try{const sig=(_sigEl||document.getElementById('edlSig')).toDataURL('image/png');await photosOuFile('chauffeurs_edl',ref.id,'edl',[{data:sig,type:'signature'}],'signature',_r==='ok');}catch(e){}}
@@ -5296,7 +5537,7 @@ async function saveNoDamage(){
   if(!ok)return;
   busy('Enregistrement…');
   try{
-    const _r=await fbWrite(db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()}));
+    const _r=await fbWrite(db.collection('chauffeurs_edl').add({chauffeur:S.chauffeur.id,auteur:monAuteur(),chauffeurNom:chNom(),vehicule:S.vehicule.id,tournee:tourneeJour(),date:TODAY,remarque:'Aucun dommage signalé',aucunDommage:true,photos:[],signature:null,at:Date.now()}));
     markDebutDone();
     uiToast(fbMsg(_r,'Déclaration enregistrée'),'ok');
     _edlMandatory=false;openCharge(true);
