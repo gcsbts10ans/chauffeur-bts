@@ -858,6 +858,7 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
     <div id="hubBanner"></div>
     <div class="glass hero" id="hubHero" onclick="go('jour')"></div>
     <div class="grid" id="hubGrid"></div>
+    <div style="text-align:center;margin-top:14px"><button onclick="actualiserPda()" style="border:1px solid #1E5FAD;background:#fff;color:#1E5FAD;border-radius:14px;font-size:15px;font-weight:600;padding:12px 22px;min-height:48px">&#8635; Actualiser</button></div>
     <div class="sig-bts">Eric TISSERAND — conception et réalisation</div>
   </section>
 
@@ -1191,7 +1192,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
 const EN_TEST=/-test\.html$/i.test(location.pathname);   // fichier *-test.html = version de test (bandeau, service worker a part)
-const APP_VERSION='v97'+(EN_TEST?'-test':'');
+const APP_VERSION='v98'+(EN_TEST?'-test':'');
 // Version de test = fichier nomme *-test.html (decision Eric 24/11) : bandeau rouge.
 // Renomme sans -test, le meme fichier devient la production, sans autre modification.
 try{ if(EN_TEST){ var _bt=document.getElementById('bandeauTest'); if(_bt)_bt.style.display=''; } }catch(e){}
@@ -1915,7 +1916,7 @@ function renderVehicules(){
     <div id="vehTours"></div>
     <div id="vehDetail"></div>
     <button class="save-btn" id="vehGo" onclick="confirmVehicule()" disabled style="margin-top:14px">Démarrer ma journée</button>
-    <button onclick="openMessagesPreDemarrage()" style="position:relative;width:100%;margin-top:10px;border:1px solid #1E5FAD;background:transparent;color:#1E5FAD;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1E5FAD" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Voir mes messages<span id="vehMsgBadge" style="display:none;position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;padding:0 6px;box-sizing:border-box"></span></button>`;
+    <button onclick="openMessagesPreDemarrage()" style="position:relative;width:100%;margin-top:10px;border:1px solid #1E5FAD;background:transparent;color:#1E5FAD;border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;${MESSAGERIE_ACTIVE?'':'display:none;'}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1E5FAD" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Voir mes messages<span id="vehMsgBadge" style="display:none;position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;padding:0 6px;box-sizing:border-box"></span></button>`;
   updateVehMsgBadge();
 }
 function onVehSel(){
@@ -2113,7 +2114,8 @@ function masquerEchecChargement(){
   var z=document.getElementById('loadEchec'); if(z) z.style.display='none';
   var sp=document.querySelector('#s-load .spin'); if(sp) sp.style.display='';
 }
-async function pickVehicule(id){
+async function pickVehicule(id,opts){
+  var _actu=!!(opts&&opts.actualiser);   // v98 : bouton « Actualiser » de l'accueil
   S.vehicule=(id&&typeof id==='object')?id:VEHICULES.find(v=>v.id===id);
   document.getElementById('jourAva').textContent=ini(S.chauffeur.nom,S.chauffeur.prenom);
   document.getElementById('jourVeh').textContent=S.vehicule.id;
@@ -2166,7 +2168,9 @@ async function pickVehicule(id){
   attachStatuts(nums);
   attachTourneesLive();   // v91 : codes d'acces corriges en direct
 
-  (S.vehicule.tournees||[]).forEach(function(_tn){
+  // v98 : en actualisation, la journee est deja demarree : on ne reecrit pas
+  // l'heure de demarrage (demarreAt) et on retourne directement a l'accueil.
+  if(!_actu) (S.vehicule.tournees||[]).forEach(function(_tn){
     if(!_tn)return;
     // `tournee` porte l'IDENTIFIANT (80MAS), `numero` et `libelle` servent a
     // l'affichage cote responsable sans qu'il ait a relire le referentiel.
@@ -2184,6 +2188,7 @@ async function pickVehicule(id){
   // Prise de poste : état des lieux + chargement (1×/jour/camion).
   // Aucune tournée aujourd'hui (week-end / jour sans arrêt) → on saute ces étapes et on va à l'accueil.
   const aDesArrets=S.tournees.some(t=>(t.arrets||[]).length>0);
+  if(_actu){ enterHub(); return; }
   await syncVerrousJour(); // confronte les verrous locaux a la base avant d'imposer l'EDL
   // Changement de camion : l'etat des lieux du NOUVEAU vehicule reste
   // obligatoire, les verrous etant indexes par camion. Le chargement, lui,
@@ -2193,6 +2198,37 @@ async function pickVehicule(id){
   else if(_chargeTransfert) openCharge(false);
   else if(!chargeDoneToday()) openCharge(true);
   else enterHub();
+}
+/* v98 (retour de Jhon CLERGE, 25/11/2026) : ACTUALISER SANS SE RECONNECTER.
+   Relit les tournees (arrets, codes, diffusion du responsable) et le
+   referentiel (camions, remorques, chauffeurs), puis revient a l'accueil.
+   La session, le camion et les tournees choisies sont gardes : pas de code,
+   pas de nouvelle prise de poste, pas de nouveau chargement. Controle aussi
+   la version en ligne (ecran de mise a jour si besoin). */
+var _actuEnCours=false;
+async function actualiserPda(){
+  if(_actuEnCours||!S.chauffeur||!S.vehicule)return;
+  if(navigator.onLine===false){ uiToast('Pas de réseau : actualisation impossible','err'); return; }
+  _actuEnCours=true;
+  busy('Actualisation\u2026');
+  try{
+    oublierTournees();
+    await loadTournees();
+    try{
+      const [cp,cv]=await avecDelai(Promise.all([
+        db.collection('chauffeurs_profils').limit(300).get(),
+        db.collection('chauffeurs_vehicules').limit(100).get()
+      ]),10000);
+      const ch=cp.docs.map(d=>d.data()).filter(c=>c.actif!==false).sort((a,b)=>(a.nom||'').localeCompare(b.nom||''));
+      const ve=cv.docs.map(d=>d.data()).filter(v=>v.actif!==false).sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+      if(ch.length){ CHAUFFEURS=ch; VEHICULES=ve; writeCache(); }
+    }catch(e){ console.warn('actualisation referentiel',e); }
+  }catch(e){ console.warn('actualisation',e); }
+  finally{ busyDone(); }
+  try{ await pickVehicule(S.vehicule,{actualiser:true}); uiToast('Application actualisée','ok'); }
+  catch(e){ uiToast('Actualisation incomplète','err'); }
+  finally{ _actuEnCours=false; }
+  try{ verifierVersionServeur(true); }catch(e){}
 }
 /* Le suivi GPS ne demarre PLUS a l'arrivee sur l'accueil : le chauffeur qui
    consultait son planning ou ses messages depuis chez lui etait localise
@@ -3807,7 +3843,7 @@ const HUB=[
  {type:'direct',id:'jour',label:'Ma tournée'},
  {type:'direct',id:'charge',label:'Chargement'},
  {type:'folder',fid:'veh',label:'Véhicule',items:['carburant','km','entretien','rapport','controle','arrete']},
- {type:'folder',fid:'msg',label:'Messages',items:['messages','alertes','messignal']},
+ {type:'folder',fid:'msg',label:'Alertes',items:['alertes','messignal']},   // v98 : messagerie retiree
  {type:'direct',id:'fin',label:'Fin de journée'},
  {type:'direct',id:'planning',label:'Mon planning'},
  {type:'direct',id:'epi',label:'E.P.I'}
@@ -3931,7 +3967,13 @@ function labelFor(id){
   if(id==='responsable')return 'Responsable';if(id==='all')return 'Tous';
   const c=CHAUFFEURS.find(x=>x.id===id);return c?(c.prenom||c.nom):id;
 }
+/* v98 (retour de Jhon CLERGE, 25/11/2026) : messagerie retiree du telephone.
+   Plus d'icone, plus de bouton « Voir mes messages », plus d'ecoute : aucun
+   message ne s'affiche ni ne se compte (aucune lecture Firestore).
+   Pour la remettre : MESSAGERIE_ACTIVE = true. */
+var MESSAGERIE_ACTIVE=false;
 function attachMessages(){
+  if(!MESSAGERIE_ACTIVE)return;
   detachMessages();
   _msgIn={};_msgOut={};_knownIn={};_msgInPrimed=false;
   const cutoff=Date.now()-30*86400000; // historique : 30 jours
@@ -4231,7 +4273,15 @@ function closeMessages(){ if(S.msgTo)setLastRead(S.msgTo,Date.now()); if(S.msgRe
 function openMessagesPreDemarrage(){ S.msgReturn='veh'; openMessages(); }
 
 /* ===== ALERTES ===== */
-const ALERTE_TYPES=['Retard','Problème véhicule','Problème site','Accident','Autre'];
+/* v98 (retour de Jhon CLERGE, 25/11/2026) : types d'alerte = une ligne par
+   remorque de la flotte (vehicule dont le type contient « remorque »), puis
+   « Problème véhicule » et « Autre ». Les remorques viennent de la Flotte :
+   rien a modifier dans l'appli quand une remorque change. */
+function alerteTypes(){
+  var rem=(VEHICULES||[]).filter(function(v){ return /remorque/i.test(String(v.type||'')); })
+    .map(function(v){ return 'Remorque '+v.id; }).sort();
+  return rem.concat(['Problème véhicule','Autre']);
+}
 let _alUnsub=null;
 function alSeenKey(){return 'al_seen_'+(S.chauffeur?S.chauffeur.id:'');}
 function getAlSeen(){try{return parseInt(localStorage.getItem(alSeenKey())||'0',10)||0;}catch(e){return 0;}}
@@ -4260,7 +4310,7 @@ function paintAlertes(){
 function renderAlertes(){
   document.getElementById('alText').value='';
   const sel=document.getElementById('alType');
-  sel.innerHTML='<option value="">— Choisir —</option>'+ALERTE_TYPES.map(t=>`<option>${t}</option>`).join('');
+  sel.innerHTML='<option value="">— Choisir —</option>'+alerteTypes().map(t=>`<option>${esc(t)}</option>`).join('');
   sel.value='';
   paintAlertes();
   if(S.alertes&&S.alertes.length)markAlSeen(S.alertes[0].at);
@@ -4387,7 +4437,7 @@ async function openCarburant(){
   go('carburant');
   var el=document.getElementById('carbHist');el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    _pleins=await histQuery('chauffeurs_carburant',200);
+    _pleins=(await histQuery('chauffeurs_carburant',200)).filter(function(r){ return r.supprime!==true; });   // v98 : pleins supprimes par le responsable exclus
   }catch(e){console.warn('carburant',e);_pleins=[];el.innerHTML='<div class="msg-empty">Lecture impossible</div>';return;}
   remplirMoisCarb();
   renderCarbHist();
@@ -5127,7 +5177,9 @@ function busy(msg){document.getElementById('busyMsg').textContent=msg||'Envoi…
 function busyDone(){document.getElementById('busy').classList.remove('show');}
 
 /* --- Anomalies tournée --- */
-const ANO_TYPES=['Accès impossible','Changement de code','Linge manquant','Linge non conforme','Roll/chariot abîmé','Retard livraison','Problème véhicule','Autre'];
+// v98 (retour de Jhon CLERGE, 25/11/2026) : quatre natures seulement.
+// « Roll abîmé » est compte cote responsable avec l'ancien « Roll/chariot abîmé ».
+const ANO_TYPES=['Roll non traité','Roll abîmé','Accès impossible','Autre'];
 let _anoSite='';
 function openAno(site){
   _anoSite=site||'';
