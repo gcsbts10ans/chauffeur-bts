@@ -1192,7 +1192,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
 const EN_TEST=/-test\.html$/i.test(location.pathname);   // fichier *-test.html = version de test (bandeau, service worker a part)
-const APP_VERSION='v98'+(EN_TEST?'-test':'');
+const APP_VERSION='v99'+(EN_TEST?'-test':'');
 // Version de test = fichier nomme *-test.html (decision Eric 24/11) : bandeau rouge.
 // Renomme sans -test, le meme fichier devient la production, sans autre modification.
 try{ if(EN_TEST){ var _bt=document.getElementById('bandeauTest'); if(_bt)_bt.style.display=''; } }catch(e){}
@@ -1910,7 +1910,9 @@ function optsTournees(sel,vide){
   }).join('');
 }
 function renderVehicules(){
-  const opts='<option value="">— Choisis ton camion —</option>'+VEHICULES.map(v=>`<option value="${v.id}">${v.id}${v.type?' · '+v.type:''}</option>`).join('')+'<option value="RELAIS">Camion relais — panne</option>';
+  // v99 (25/11/2026) : les remorques ne sont pas des camions : elles se choisissent
+  // a la prise de poste (« Remorque attelée »), plus dans cette liste.
+  const opts='<option value="">— Choisis ton camion —</option>'+VEHICULES.filter(v=>!/remorque/i.test(String(v.type||''))).map(v=>`<option value="${v.id}">${v.id}${v.type?' · '+v.type:''}</option>`).join('')+'<option value="RELAIS">Camion relais — panne</option>';
   document.getElementById('vehList').innerHTML=`
     <div class="fld"><label>Camion</label><div class="sel-wrap"><select id="vehSel" onchange="onVehSel()">${opts}</select></div></div>
     <div id="vehTours"></div>
