@@ -7,7 +7,7 @@
 // Fichier nomme sw-chauffeur-test.js = version de test : caches prefixes « test- »,
 // jamais melanges avec ceux de la production (et inversement).
 const PREFIXE = /-test\.js$/i.test(self.location.pathname) ? 'test-chauffeur-' : 'chauffeur-';
-const CACHE = PREFIXE + 'v99';
+const CACHE = PREFIXE + 'v100';
 const CDN = ['unpkg.com', 'www.gstatic.com'];
 
 self.addEventListener('install', e => {

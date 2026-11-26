@@ -910,6 +910,11 @@ body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;justify
         <div class="sel-wrap"><select id="alType"></select></div>
       </div>
       <div class="fld"><label>Détail (optionnel)</label><textarea id="alText" placeholder="Décris la situation…"></textarea></div>
+      <div class="fld"><label>Photos (optionnel, 3 maximum)</label>
+        <input type="file" id="alFile" accept="image/*" capture="environment" multiple style="display:none" onchange="addPhotos('al',this,'alThumbs')">
+        <button type="button" class="photo-btn" onclick="document.getElementById('alFile').click()"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Ajouter une photo</button>
+        <div class="thumbs" id="alThumbs"></div>
+      </div>
       <button class="al-send" onclick="sendAlerte()">Envoyer l'alerte</button>
     </div>
     <div class="sec-title">Dernières alertes</div>
@@ -1192,7 +1197,7 @@ try{ db.settings({ experimentalAutoDetectLongPolling:true, merge:true }); }catch
    Retrait d'une constante Apps Script vide et inutilisée.
    ────────────────────────────────────────────────────────────────────────── */
 const EN_TEST=/-test\.html$/i.test(location.pathname);   // fichier *-test.html = version de test (bandeau, service worker a part)
-const APP_VERSION='v99'+(EN_TEST?'-test':'');
+const APP_VERSION='v100'+(EN_TEST?'-test':'');
 // Version de test = fichier nomme *-test.html (decision Eric 24/11) : bandeau rouge.
 // Renomme sans -test, le meme fichier devient la production, sans autre modification.
 try{ if(EN_TEST){ var _bt=document.getElementById('bandeauTest'); if(_bt)_bt.style.display=''; } }catch(e){}
@@ -3681,19 +3686,37 @@ function renderCharge(){
    elle est maintenue : cet ecran alimente la fiche presentee aux forces de
    l'ordre. Un chargement au-dela de la charge utile affiche sans aucune
    mention reviendrait a attester que tout est normal. */
+/* v100 (26/11/2026) : ATTELAGE. Si une remorque est attelee aujourd'hui a ce
+   camion (prise de poste du jour), sa place et sa charge utile s'ajoutent a
+   celles du camion. Une valeur absente sur la remorque compte pour 0 ; si le
+   camion et la remorque n'ont ni l'une ni l'autre, pas de rappel. */
+function remorqueAttelee(){
+  if(!S.vehicule)return null;
+  var id=''; try{ id=localStorage.getItem('rem_'+S.vehicule.id)||''; }catch(e){}
+  if(!id||remorquesDuJour().indexOf(id)<0)return null;   // attelage d'un autre jour : ignore
+  return (VEHICULES||[]).find(function(v){return v.id===id;})||{id:id};
+}
+function capaciteAttelage(){
+  var v=S.vehicule||{}, r=remorqueAttelee();
+  var n=function(x){ return (typeof x==='number')?x:null; };
+  var som=function(a,b){ return (a==null&&b==null)?null:((a||0)+(b||0)); };
+  return { cap:som(n(v.capaciteRolls), r?n(r.capaciteRolls):null),
+           cu:som(n(v.chargeUtile), r?n(r.chargeUtile):null),
+           remorque:r?r.id:'' };
+}
 function chargeAlerte(nb,poids){
-  const v=S.vehicule||{};
-  const cap=(typeof v.capaciteRolls==='number')?v.capaciteRolls:null;
-  const cu=(typeof v.chargeUtile==='number')?v.chargeUtile:null;
+  const A=capaciteAttelage();
+  const cap=A.cap, cu=A.cu;
+  const quoi=A.remorque?'l\u2019attelage (camion + remorque '+A.remorque+')':'du camion';
   const msgs=[];
-  if(cap!=null&&nb>cap) msgs.push('Au-delà de '+cap+' contenants, la place du camion.');
+  if(cap!=null&&nb>cap) msgs.push('Au-delà de '+cap+' contenants, la place '+(A.remorque?'de ':'')+quoi+'.');
   if(cu!=null&&poids>cu) msgs.push('Au-delà de la charge utile : '+poids+' kg pour '+cu+' kg.');
   if(!msgs.length){
     if(cu==null&&cap==null)return '';
     const reste=[];
     if(cap!=null&&cap>=nb)reste.push((cap-nb)+' place'+((cap-nb)>1?'s':''));
     if(cu!=null)reste.push((cu-poids)+' kg');
-    return reste.length?'<div class="chg-ok">Il reste '+reste.join(' · ')+'</div>':'';
+    return reste.length?'<div class="chg-ok">Il reste '+reste.join(' · ')+(A.remorque?' (avec la remorque '+esc(A.remorque)+')':'')+'</div>':'';
   }
   return '<div class="chg-info">'+msgs.map(esc).join('<br>')+'</div>';
 }
@@ -3770,7 +3793,7 @@ async function saveCharge(){
   if(!Array.isArray(CHARGE.tours)||!CHARGE.tours.length)CHARGE.tours=[{n:1,propres:0,debutAt:CHARGE.debutAt}];
   const _i=CHARGE.tours.length-1;
   CHARGE.tours[_i]={n:CHARGE.tour||1,propres:CHARGE.propres||0,cabris:CHARGE.cabris||0,debutAt:CHARGE.debutAt};
-  try{await fbWrite(db.collection('chauffeurs_chargement').doc(chargeDocId()).set({date:TODAY,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),tours:CHARGE.tours,tourCourant:CHARGE.tour||1,totalPropres:chargeTotalJour(),rollsPropres:CHARGE.propres||0,cabris:CHARGE.cabris||0,rolls:(CHARGE.propres||0)+(CHARGE.cabris||0),poids:chargePoids(),at:Date.now()},{merge:true}));}
+  try{await fbWrite(db.collection('chauffeurs_chargement').doc(chargeDocId()).set({date:TODAY,vehicule:S.vehicule.id,chauffeur:S.chauffeur.id,chauffeurNom:chNom(),tours:CHARGE.tours,tourCourant:CHARGE.tour||1,totalPropres:chargeTotalJour(),rollsPropres:CHARGE.propres||0,cabris:CHARGE.cabris||0,rolls:(CHARGE.propres||0)+(CHARGE.cabris||0),poids:chargePoids(),remorque:(capaciteAttelage().remorque||''),at:Date.now()},{merge:true}));}   // v100 : remorque attelee notee avec le chargement
   catch(e){console.warn('charge',e);}
 }
 
@@ -4311,6 +4334,7 @@ function paintAlertes(){
 }
 function renderAlertes(){
   document.getElementById('alText').value='';
+  PH['al']=[]; renderThumbs('al','alThumbs');   // v100 : photos d'alerte
   const sel=document.getElementById('alType');
   sel.innerHTML='<option value="">— Choisir —</option>'+alerteTypes().map(t=>`<option>${esc(t)}</option>`).join('');
   sel.value='';
@@ -4321,17 +4345,27 @@ async function sendAlerte(){
   const type=document.getElementById('alType').value;
   if(!type){uiToast('Choisis un type d\'alerte','err');return;}
   const txt=(document.getElementById('alText').value||'').trim();
-  const ok=await uiConfirm('Envoyer l\'alerte',type+(txt?' — '+txt:'')+'. Le responsable sera notifié.','Envoyer');
+  const photos=PH['al']||[];   // v100 (26/11/2026) : jusqu'a 3 photos, meme circuit que les anomalies
+  const ok=await uiConfirm('Envoyer l\'alerte',type+(txt?' — '+txt:'')+(photos.length?' · '+photos.length+' photo(s)':'')+'. Le responsable sera notifié.','Envoyer');
   if(!ok)return;
+  busy('Envoi de l\'alerte\u2026');
   try{
-    var _r=await fbWrite(db.collection('chauffeurs_alertes').add({
+    const ref=db.collection('chauffeurs_alertes').doc();
+    var _r=await fbWrite(ref.set({
       tournee:tourneeJour(),
       from:S.chauffeur.id, fromName:(S.chauffeur.prenom||'')+' '+(S.chauffeur.nom||''),
-      vehicule:S.vehicule.id, type:type, message:txt, at:Date.now(), lu:false
+      vehicule:S.vehicule.id, type:type, message:txt, photos:[], nbPhotos:photos.length, at:Date.now(), lu:false
     }));
-    uiToast(fbMsg(_r,'Alerte envoyée'),'ok');
+    let pr={urls:[],enFile:false};
+    if(photos.length){ busy(photos.length===1?'Envoi de la photo\u2026':'Envoi des '+photos.length+' photos\u2026');
+      pr=await photosOuFile('chauffeurs_alertes',ref.id,'alertes',photos.map(p=>({data:p.data,type:'photo'})),'photos',_r==='ok'); }
+    if(!photos.length) uiToast(fbMsg(_r,'Alerte envoyée'),'ok');
+    else if(pr.urls.length) uiToast('Alerte + photos envoyées','ok');
+    else alertePhotos(photos.length,pr.urls,'Alerte',pr.enFile);
+    PH['al']=[];
     go('hub');renderHub();
   }catch(e){uiToast('Envoi impossible','err');}
+  finally{busyDone();}
 }
 
 /* ======================= LOT 3 : VÉHICULE ======================= */
@@ -4498,7 +4532,7 @@ async function loadKmHist(){
   const el=document.getElementById('kmHist');
   el.innerHTML='<div class="msg-empty">Chargement…</div>';
   try{
-    const rows=await histQuery('chauffeurs_km',20);
+    const rows=(await histQuery('chauffeurs_km',20)).filter(function(r){ return r.supprime!==true; });   // v100 : releves supprimes par le responsable exclus
     el.innerHTML=rows.length?rows.map((r,i)=>{
       const prev=rows[i+1];const d=(prev&&r.km&&prev.km)?(r.km-prev.km):null;
       return `<div class="glass hist-row"><div class="h1"><b>${r.km} km</b><span class="dt">${frDate(r)}</span></div>
@@ -5034,7 +5068,7 @@ function compressPhoto(file,maxW,q){
 /* Plafonds de photos par type de saisie. La cloture est passee de 2 a 3
    le 16/09/2026 : le tableau de bord seul ne suffisait pas a documenter
    l'etat du camion en fin de journee. */
-const PH_MAX={edl:3,pp:3,fin:3,ppc:3,ppr:3};
+const PH_MAX={edl:3,pp:3,fin:3,ppc:3,ppr:3,al:3};   // v100 : al = alertes
 async function addPhotos(bucket,input,thumbsId){
   PH[bucket]=PH[bucket]||[];
   const max=PH_MAX[bucket]||6;
